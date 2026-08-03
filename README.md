@@ -15,7 +15,17 @@
 
 ## 快速开始
 
-### 推荐：双击启动
+### Windows 桌面版（推荐）
+
+桌面版支持双击 `.md` 打开、原位保存、单实例多标签和默认应用注册：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\desktop\install.ps1
+```
+
+安装后可在工具栏点击“默认”，进入 Windows 设置确认将 MD Viewer 设为 Markdown 默认应用。桌面版不启动 localhost 服务；构建与卸载说明见 `desktop/README.md`。
+
+### 便携网页版：双击启动
 
 ```text
 MD-Viewer.vbs

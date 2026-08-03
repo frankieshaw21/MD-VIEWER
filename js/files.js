@@ -6,6 +6,7 @@
     options = options || {};
     const context = options.context;
     if (!context || typeof context.getPort !== 'function') throw new TypeError('Files requires context');
+    const desktop = namespace.Desktop || { available: false };
 
     let started = false;
     let editor, history;
@@ -34,9 +35,10 @@
     function getModified() { return Boolean(context.state.get('modified')); }
     function listFiles() {
       return openFiles.map(function(file, index) {
-        return { index: index, name: file.name, modified: index === activeFileIndex && getModified(),
+        return { index: index, name: file.name, modified: file.content !== file.savedContent,
           active: index === activeFileIndex, lastModified: file.lastModified || null,
-          needsPermission: Boolean(file.needsPermission), serverPath: file.serverPath || null };
+          needsPermission: Boolean(file.needsPermission), serverPath: file.serverPath || null,
+          desktopPath: file.desktopPath || null };
       });
     }
     function publishList() { emit('files:list-changed', { files: listFiles(), activeIndex: activeFileIndex }); }
@@ -85,7 +87,7 @@
     function normalizeRecord(file, content, handle) {
       return {
         name: file.name, content: String(content || ''), savedContent: String(content || ''),
-        handle: handle || null, serverPath: null, historyKey: null,
+        handle: handle || null, serverPath: null, desktopPath: null, historyKey: null,
         lastModified: file.lastModified || Date.now(), fileSize: file.size,
         needsPermission: false
       };
@@ -123,6 +125,10 @@
     }
 
     async function openFile() {
+      if (desktop.available) {
+        try { return openDesktopFiles(await desktop.openFilesDialog()); }
+        catch (error) { alert(error.message); return false; }
+      }
       if (context.env.isServerMode) return openFileBrowser();
       if (global.showOpenFilePicker) {
         try {
@@ -164,6 +170,8 @@
       index = Number(index);
       if (index < 0 || index >= openFiles.length) return false;
       const closed = openFiles[index];
+      if (index === activeFileIndex && editor) closed.content = editor.getContent({ flush: true });
+      if (closed.content !== closed.savedContent && !confirm('“' + closed.name + '”有未保存修改，确定关闭吗？')) return false;
       openFiles.splice(index, 1);
       emit('file:closed', { file: closed, index: index });
       if (!openFiles.length) {
@@ -195,7 +203,17 @@
         await history.createHistorySnapshot(file, '保存版本', content);
       }
       let savedToHandle = false;
-      if (file && file.handle) {
+      if (file && file.desktopPath && desktop.available) {
+        try {
+          const metadata = await desktop.writeFile(file.desktopPath, content);
+          file.lastModified = metadata.lastModified; file.fileSize = metadata.size;
+          savedToHandle = true;
+        } catch (error) {
+          alert('保存失败：' + error.message);
+          return false;
+        }
+      }
+      if (!savedToHandle && file && file.handle) {
         try {
           let permission = typeof file.handle.queryPermission === 'function'
             ? await file.handle.queryPermission({ mode: 'readwrite' }) : 'granted';
@@ -230,7 +248,11 @@
       if (local !== file.savedContent && !confirm('当前文件有未保存修改。重新加载会丢弃修改，是否继续？')) return false;
       await history.createHistorySnapshot(file, '重新加载前', local);
       let content, diskFile;
-      if (file.serverPath) {
+      if (file.desktopPath && desktop.available) {
+        const data = await desktop.readFile(file.desktopPath);
+        content = data.content;
+        diskFile = { lastModified: data.lastModified, size: data.size };
+      } else if (file.serverPath) {
         const response = await fetch('/api/read?file=' + encodeURIComponent(file.serverPath));
         if (!response.ok) throw new Error('读取文件失败（HTTP ' + response.status + '）');
         content = await response.text();
@@ -320,15 +342,23 @@
     async function pollLocal() {
       if (document.hidden || autoWatchBusy) return;
       const file = getActiveFile();
-      if (!file || !file.handle || file.needsPermission) return;
+      if (!file || ((!file.handle || file.needsPermission) && !file.desktopPath)) return;
       autoWatchBusy = true;
       try {
-        const diskFile = await file.handle.getFile();
-        if (diskFile.lastModified !== file.lastModified || diskFile.size !== file.fileSize) {
-          await applyExternal(file, await readBlobText(diskFile), diskFile.lastModified, diskFile.size);
+        if (file.desktopPath && desktop.available) {
+          const stat = await desktop.statFile(file.desktopPath);
+          if (stat.exists && (stat.lastModified !== file.lastModified || stat.size !== file.fileSize)) {
+            const data = await desktop.readFile(file.desktopPath);
+            await applyExternal(file, data.content, data.lastModified, data.size);
+          }
+        } else {
+          const diskFile = await file.handle.getFile();
+          if (diskFile.lastModified !== file.lastModified || diskFile.size !== file.fileSize) {
+            await applyExternal(file, await readBlobText(diskFile), diskFile.lastModified, diskFile.size);
+          }
         }
       } catch (error) {
-        if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+        if (!file.desktopPath && (error.name === 'NotAllowedError' || error.name === 'SecurityError')) {
           file.needsPermission = true;
           emit('permission:changed', { file: file, permission: 'prompt' });
         }
@@ -400,6 +430,30 @@
       const response = await fetch('/api/list?dir=' + encodeURIComponent(browserPath || ''));
       const data = await response.json(); if (data.parent !== null && data.parent !== undefined) return fbNavigate(data.parent);
     }
+    async function openDesktopFile(path) {
+      if (!desktop.available || !path) return null;
+      const data = await desktop.readFile(path);
+      let index = openFiles.findIndex(function(file) {
+        return file.desktopPath && file.desktopPath.toLowerCase() === data.path.toLowerCase();
+      });
+      if (index < 0) {
+        openFiles.push({ name: data.name, content: data.content, savedContent: data.content,
+          handle: null, serverPath: null, desktopPath: data.path, historyKey: null,
+          lastModified: data.lastModified, fileSize: data.size, needsPermission: false });
+        index = openFiles.length - 1;
+        emit('file:opened', { file: openFiles[index], index: index });
+      } else if (openFiles[index].content === openFiles[index].savedContent) {
+        openFiles[index].content = openFiles[index].savedContent = data.content;
+        openFiles[index].lastModified = data.lastModified; openFiles[index].fileSize = data.size;
+      }
+      await switchFile(index); markSessionDirty(); publishList();
+      return openFiles[index];
+    }
+    async function openDesktopFiles(paths) {
+      let result = null;
+      for (const path of Array.from(paths || [])) result = await openDesktopFile(path);
+      return result;
+    }
     async function openServerFile(path) {
       const response = await fetch('/api/read?file=' + encodeURIComponent(path));
       if (!response.ok) throw new Error('无法读取文件: ' + path);
@@ -407,7 +461,7 @@
       let index = openFiles.findIndex(function(file) { return file.serverPath === path; });
       if (index < 0) {
         openFiles.push({ name: path.split(/[\\/]/).pop(), content: content, savedContent: content,
-          handle: null, serverPath: path, lastModified: null, needsPermission: false });
+          handle: null, serverPath: path, desktopPath: null, lastModified: null, needsPermission: false });
         index = openFiles.length - 1;
         emit('file:opened', { file: openFiles[index], index: index });
       } else openFiles[index].content = openFiles[index].savedContent = content;
@@ -484,7 +538,8 @@
           files: openFiles.map(function(file) {
             return { name: file.name, content: file.content,
               savedContent: file.savedContent === file.content ? null : file.savedContent,
-              serverPath: file.serverPath || null, historyKey: file.historyKey || null,
+              serverPath: file.serverPath || null, desktopPath: file.desktopPath || null,
+              historyKey: file.historyKey || null,
               lastModified: file.lastModified || null, fileSize: file.fileSize === undefined ? null : file.fileSize };
           })
         }));
@@ -506,9 +561,10 @@
         openFiles = (data.files || []).map(function(file) {
           return { name: file.name, content: String(file.content || ''),
             savedContent: file.savedContent === null || file.savedContent === undefined ? String(file.content || '') : String(file.savedContent),
-            handle: null, serverPath: file.serverPath || null, historyKey: file.historyKey || null,
+            handle: null, serverPath: file.serverPath || null, desktopPath: file.desktopPath || null,
+            historyKey: file.historyKey || null,
             lastModified: file.lastModified || null, fileSize: file.fileSize === null ? undefined : file.fileSize,
-            needsPermission: !file.serverPath };
+            needsPermission: !file.serverPath && !file.desktopPath };
         });
         if (!openFiles.length) return;
         activeFileIndex = Math.max(0, Math.min(Number(data.activeIndex) || 0, openFiles.length - 1));
@@ -541,10 +597,18 @@
       return api;
     }
 
+    function hasUnsavedChanges() {
+      const active = getActiveFile();
+      if (active && editor) active.content = editor.getContent({ flush: true });
+      return openFiles.some(function(file) { return file.content !== file.savedContent; });
+    }
+
     const api = Object.freeze({
       start: start, openFile: openFile, addFile: addFile, addFiles: addFiles,
+      openDesktopFile: openDesktopFile, openDesktopFiles: openDesktopFiles,
       reloadFile: reloadFile, saveFile: saveFile, switchFile: switchFile, closeFile: closeFile,
       listFiles: listFiles, getActiveFile: getActiveFile, getActiveIndex: getActiveIndex,
+      hasUnsavedChanges: hasUnsavedChanges,
       updateActiveContent: updateActiveContent, getCurrentContent: getCurrentContent,
       replaceActiveContent: replaceActiveContent, setModified: setModified,
       relinkCurrentFile: relinkCurrentFile, markSessionDirty: markSessionDirty,

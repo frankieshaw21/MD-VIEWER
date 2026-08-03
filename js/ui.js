@@ -71,7 +71,7 @@
     }
     function renderPermission(file) {
       const hint = document.getElementById('linkFileHint'); if (!hint) return;
-      const needed = file && !file.serverPath && (!file.handle || file.needsPermission);
+      const needed = file && !file.serverPath && !file.desktopPath && (!file.handle || file.needsPermission);
       hint.style.display = needed ? '' : 'none';
       if (needed) hint.textContent = file.handle
         ? '⚠ 点击授权文件访问，启用实时更新' : '⚠ 点击重新关联文件，启用实时更新';

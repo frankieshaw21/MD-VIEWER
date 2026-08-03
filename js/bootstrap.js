@@ -118,6 +118,7 @@
         context.state.set('ready', true);
         context.emit('state:changed', { key: 'ready', value: true, previous: previous });
         context.emit('app:ready', context);
+        if (namespace.Desktop && namespace.Desktop.available) namespace.Desktop.start(context);
       }).catch(function(error) {
         started = false;
         console.error('MDViewer startup failed.', error);

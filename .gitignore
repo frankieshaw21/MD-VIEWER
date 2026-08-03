@@ -1,0 +1,12 @@
+# .NET build output
+desktop/bin/
+desktop/obj/
+desktop/publish/
+
+# Machine-specific performance output
+desktop/performance-results.json
+
+# IDE and user-local files
+.vs/
+*.user
+*.suo

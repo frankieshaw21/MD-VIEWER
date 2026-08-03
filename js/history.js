@@ -52,7 +52,9 @@
     function ensureHistoryKey(file) {
       if (!file) return '';
       if (!file.historyKey) {
-        if (file.serverPath) {
+        if (file.desktopPath) {
+          file.historyKey = 'desktop:' + file.desktopPath.replace(/\\/g, '/').toLowerCase();
+        } else if (file.serverPath) {
           file.historyKey = 'server:' + file.serverPath.replace(/\\/g, '/').toLowerCase();
         } else {
           const id = crypto && typeof crypto.randomUUID === 'function'
