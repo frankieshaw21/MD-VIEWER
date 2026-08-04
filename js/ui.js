@@ -38,10 +38,11 @@
       fileList.innerHTML = '';
       entries.forEach(function(file) {
         const item = document.createElement('li');
-        item.className = file.active ? 'active' : '';
+        item.className = [file.active ? 'active' : '', file.modified ? 'modified' : ''].filter(Boolean).join(' ');
         item.dataset.fileIndex = file.index;
+        if (file.modified) item.title = '有未保存修改';
         const icon = document.createElement('span'); icon.textContent = '📄';
-        const name = document.createElement('span'); name.textContent = file.name;
+        const name = document.createElement('span'); name.className = 'file-name'; name.textContent = file.name;
         const close = document.createElement('span'); close.className = 'close-btn'; close.textContent = '×';
         close.dataset.closeFile = file.index;
         item.append(icon, name, close); fileList.appendChild(item);
@@ -61,9 +62,10 @@
     }
     function renderModified(payload) {
       const file = payload.file;
+      if (!file || file !== files.getActiveFile()) return;
       context.elements.filename.classList.toggle('modified', payload.modified);
       context.elements.modifiedIndicator.textContent = payload.modified ? '已修改' : '';
-      if (file) context.elements.filename.textContent = file.name;
+      context.elements.filename.textContent = file.name;
     }
     function renderMetadata(payload) {
       if (!payload || payload.file !== files.getActiveFile()) return;
@@ -77,7 +79,13 @@
         ? '⚠ 点击授权文件访问，启用实时更新' : '⚠ 点击重新关联文件，启用实时更新';
     }
     function showSaved(payload) {
-      const name = payload.file ? payload.file.name : 'document.md';
+      if (!payload.file || payload.file !== files.getActiveFile()) return;
+      const name = payload.file.name;
+      if (payload.modified) {
+        context.elements.filename.textContent = name;
+        context.elements.modifiedIndicator.textContent = '保存期间有新修改';
+        return;
+      }
       context.elements.filename.textContent = name + ' ✓ 已保存';
       setTimeout(function() {
         const active = files.getActiveFile(); context.elements.filename.textContent = active ? active.name : '未打开文件';
@@ -289,7 +297,7 @@
         }
         if (!event.ctrlKey) return;
         if (key === 'o') { event.preventDefault(); files.openFile(); }
-        else if (key === 's') { event.preventDefault(); files.saveFile(); }
+        else if (key === 's') { event.preventDefault(); files.saveFile().catch(console.error); }
         else if (key === 'r') { event.preventDefault(); files.reloadFile(); }
         else if (key === '/') { event.preventDefault(); editor.invoke('toggleSource'); }
         else if (key === 'p') { event.preventDefault(); global.print(); }

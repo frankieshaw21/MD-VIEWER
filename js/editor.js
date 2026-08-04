@@ -19,6 +19,7 @@
     let lastActivityAt = 0;
     let mermaidLoaded = false;
     let mermaidFailed = false;
+    let mermaidLayoutObserver = null;
     let savedColorRange = null;
     let lastSelectionRange = null;
     const textColors = Object.freeze({
@@ -154,6 +155,139 @@
       });
     }
 
+    function enableMermaidDrag(target) {
+      if (!target || target.dataset.mermaidDragBound === '1') return;
+      target.dataset.mermaidDragBound = '1';
+      target.classList.add('mermaid-pan-enabled');
+      let dragging = false;
+      let moved = false;
+      let suppressClick = false;
+      let pointerId = null;
+      let startX = 0;
+      let startY = 0;
+      let startLeft = 0;
+      let startTop = 0;
+
+      function finishDrag(event) {
+        if (!dragging || (event && pointerId !== null && event.pointerId !== pointerId)) return;
+        dragging = false;
+        target.classList.remove('mermaid-panning');
+        if (pointerId !== null && target.hasPointerCapture && target.hasPointerCapture(pointerId)) {
+          try { target.releasePointerCapture(pointerId); } catch (error) {}
+        }
+        pointerId = null;
+        if (moved) {
+          suppressClick = true;
+          global.setTimeout(function() { suppressClick = false; }, 0);
+        }
+      }
+
+      target.addEventListener('pointerdown', function(event) {
+        if (event.button !== 0 || event.isPrimary === false) return;
+        dragging = true;
+        moved = false;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        startLeft = target.scrollLeft;
+        startTop = editorWrapper ? editorWrapper.scrollTop : 0;
+        target.classList.add('mermaid-panning');
+        try { target.setPointerCapture(pointerId); } catch (error) {}
+      });
+      target.addEventListener('pointermove', function(event) {
+        if (!dragging || event.pointerId !== pointerId) return;
+        const deltaX = event.clientX - startX;
+        const deltaY = event.clientY - startY;
+        if (!moved && Math.hypot(deltaX, deltaY) < 4) return;
+        moved = true;
+        target.scrollLeft = startLeft - deltaX;
+        if (editorWrapper) editorWrapper.scrollTop = startTop - deltaY;
+        event.preventDefault();
+      });
+      target.addEventListener('pointerup', finishDrag);
+      target.addEventListener('pointercancel', finishDrag);
+      target.addEventListener('lostpointercapture', finishDrag);
+      target.addEventListener('click', function(event) {
+        if (!suppressClick) return;
+        suppressClick = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, true);
+      target.addEventListener('dragstart', function(event) { event.preventDefault(); });
+    }
+
+    function updateMermaidStickyScrollbar(container) {
+      if (!container) return false;
+      const target = container.querySelector(':scope > .mermaid');
+      const scrollbar = container.querySelector(':scope > .mermaid-sticky-scrollbar');
+      if (!target || !scrollbar) return false;
+      const contentWidth = Math.ceil(target.scrollWidth);
+      const overflowing = contentWidth > target.clientWidth + 1;
+      scrollbar.hidden = !overflowing;
+      const spacer = scrollbar.firstElementChild;
+      if (spacer) spacer.style.width = contentWidth + 'px';
+      if (overflowing && !scrollbar.dataset.syncing) scrollbar.scrollLeft = target.scrollLeft;
+      return overflowing;
+    }
+
+    function ensureMermaidStickyScrollbar(target) {
+      const container = target && target.closest ? target.closest('.mermaid-container') : null;
+      if (!container) return null;
+      enableMermaidDrag(target);
+      let scrollbar = container.querySelector(':scope > .mermaid-sticky-scrollbar');
+      if (!scrollbar) {
+        scrollbar = document.createElement('div');
+        scrollbar.className = 'mermaid-sticky-scrollbar';
+        scrollbar.contentEditable = 'false';
+        scrollbar.setAttribute('aria-label', 'Mermaid 图横向滚动条');
+        const spacer = document.createElement('div');
+        spacer.className = 'mermaid-sticky-scrollbar-spacer';
+        scrollbar.appendChild(spacer);
+        container.appendChild(scrollbar);
+        target.addEventListener('scroll', function() {
+          if (scrollbar.dataset.syncing) return;
+          scrollbar.dataset.syncing = 'target';
+          scrollbar.scrollLeft = target.scrollLeft;
+          delete scrollbar.dataset.syncing;
+        });
+        scrollbar.addEventListener('scroll', function() {
+          if (scrollbar.dataset.syncing) return;
+          scrollbar.dataset.syncing = 'bar';
+          target.scrollLeft = scrollbar.scrollLeft;
+          delete scrollbar.dataset.syncing;
+        });
+      }
+      updateMermaidStickyScrollbar(container);
+      return scrollbar;
+    }
+
+    function updateAllMermaidStickyScrollbars() {
+      if (!editorEl) return;
+      editorEl.querySelectorAll('.mermaid-container').forEach(function(container) {
+        const target = container.querySelector(':scope > .mermaid');
+        if (target && target.querySelector('svg')) normalizeMermaidSvg(target);
+        else updateMermaidStickyScrollbar(container);
+      });
+    }
+
+    function normalizeMermaidSvg(target) {
+      const svg = target && target.querySelector ? target.querySelector('svg') : null;
+      if (!svg) return null;
+      const viewBox = svg.viewBox && svg.viewBox.baseVal;
+      const naturalWidth = viewBox && Number.isFinite(viewBox.width) && viewBox.width > 0 ? viewBox.width : 0;
+      if (!naturalWidth) {
+        ensureMermaidStickyScrollbar(target);
+        return svg;
+      }
+      svg.style.width = Math.round(naturalWidth * 100) / 100 + 'px';
+      svg.style.height = 'auto';
+      svg.style.maxWidth = 'none';
+      svg.style.display = 'block';
+      svg.style.margin = '0 auto';
+      ensureMermaidStickyScrollbar(target);
+      return svg;
+    }
+
     async function renderMermaid() {
       const containers = editorEl.querySelectorAll('.mermaid-container');
       if (!containers.length) return;
@@ -172,12 +306,17 @@
       }
       for (const container of containers) {
         const target = container.querySelector('.mermaid');
-        if (!target || target.querySelector('svg')) continue;
+        if (!target) continue;
+        if (target.querySelector('svg')) {
+          normalizeMermaidSvg(target);
+          continue;
+        }
         const raw = container.getAttribute('data-mermaid-source');
         const code = raw ? decodeURIComponent(raw) : target.textContent.trim();
         try {
           const result = await global.mermaid.render('mermaid-' + Date.now() + '-' + Math.random().toString(36).slice(2), code);
           target.innerHTML = result.svg;
+          normalizeMermaidSvg(target);
         } catch (error) {
           target.innerHTML = '<pre style="color:red;font-size:12px">Mermaid error: ' + parser.escHtml(error.message || String(error)) + '</pre>';
         }
@@ -199,7 +338,10 @@
           button.contentEditable = 'false'; pre.insertBefore(button, pre.firstChild);
         }
       });
-      scoped('a[href]').forEach(function(link) { link.target = '_blank'; link.rel = 'noopener noreferrer'; });
+      scoped('a[href]').forEach(function(link) {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+      });
       scoped('input[type="checkbox"]').forEach(function(input) { input.disabled = false; });
       if (tables && tables.normalizeImportedCellBackgrounds) tables.normalizeImportedCellBackgrounds(root);
       scoped('table').forEach(function(table) {
@@ -366,6 +508,7 @@
         await loadMermaidLib();
         const result = await global.mermaid.render('mermaid-insert-' + Date.now() + '-' + Math.random().toString(36).slice(2), code);
         target.innerHTML = result.svg;
+        normalizeMermaidSvg(target);
       } catch (error) {
         target.innerHTML = '<pre style="text-align:left;font-size:12px">' + parser.escHtml(code) +
           '</pre><div style="font-size:11px;color:#999">（mermaid.min.js 加载失败）</div>';
@@ -652,6 +795,10 @@
       setState('isSourceMode', Boolean(context.state.get('isSourceMode')));
       setPreviewDirty(Boolean(context.state.get('previewDirty')));
       bind();
+      if (global.ResizeObserver) {
+        mermaidLayoutObserver = new global.ResizeObserver(updateAllMermaidStickyScrollbars);
+        mermaidLayoutObserver.observe(editorEl);
+      }
       enhanceRenderedContent(editorEl);
       updateCounts();
       updateOutline();
@@ -684,7 +831,11 @@
       isSourceMode: isSourceMode, canPersistSession: canPersistSession,
       getOutline: getOutline, updateOutline: updateOutline, scheduleOutline: scheduleOutline,
       scrollToHeading: scrollToHeading, updateActiveHeading: updateActiveHeading,
-      captureColorSelection: captureColorSelection, applyTextColor: applyTextColor
+      captureColorSelection: captureColorSelection, applyTextColor: applyTextColor,
+      normalizeMermaidSvg: normalizeMermaidSvg,
+      enableMermaidDrag: enableMermaidDrag,
+      ensureMermaidStickyScrollbar: ensureMermaidStickyScrollbar,
+      updateMermaidStickyScrollbar: updateMermaidStickyScrollbar
     });
     return api;
   }

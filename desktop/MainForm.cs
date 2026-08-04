@@ -1,6 +1,7 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -14,6 +15,7 @@ internal sealed class MainForm : Form
     private readonly string _trustedPathsFile;
     private bool _pageReady;
     private bool _allowClose;
+    private bool _closeCheckInProgress;
 
     public MainForm(string[] initialPaths, SingleInstanceCoordinator instance)
     {
@@ -35,14 +37,17 @@ internal sealed class MainForm : Form
     private async Task InitializeWebViewAsync()
     {
         var dataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MDViewer", "WebView2");
+        var appFolder = Path.Combine(AppContext.BaseDirectory, "app");
+        var contentVersion = ComputeContentVersion(appFolder);
         var environment = await CoreWebView2Environment.CreateAsync(null, dataFolder);
         await _webView.EnsureCoreWebView2Async(environment);
         var core = _webView.CoreWebView2;
+        await RefreshAssetCacheAsync(core, dataFolder, contentVersion);
         core.Settings.AreDevToolsEnabled = false;
         core.Settings.AreHostObjectsAllowed = false;
         core.Settings.IsWebMessageEnabled = true;
         core.Settings.IsStatusBarEnabled = false;
-        core.SetVirtualHostNameToFolderMapping("mdviewer.local", Path.Combine(AppContext.BaseDirectory, "app"), CoreWebView2HostResourceAccessKind.DenyCors);
+        core.SetVirtualHostNameToFolderMapping("mdviewer.local", appFolder, CoreWebView2HostResourceAccessKind.DenyCors);
         core.WebMessageReceived += HandleWebMessage;
         core.NewWindowRequested += (_, e) => { e.Handled = true; OpenExternal(e.Uri); };
         core.NavigationStarting += (_, e) =>
@@ -53,7 +58,40 @@ internal sealed class MainForm : Form
                 OpenExternal(e.Uri);
             }
         };
-        _webView.Source = new Uri("https://mdviewer.local/md-viewer.html");
+        _webView.Source = new Uri($"https://mdviewer.local/md-viewer.html?v={contentVersion}");
+    }
+
+    private static string ComputeContentVersion(string appFolder)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[64 * 1024];
+        foreach (var path in Directory.EnumerateFiles(appFolder, "*", SearchOption.AllDirectories)
+                     .OrderBy(path => Path.GetRelativePath(appFolder, path), StringComparer.OrdinalIgnoreCase))
+        {
+            var relativePath = Path.GetRelativePath(appFolder, path).Replace('\\', '/');
+            hash.AppendData(Encoding.UTF8.GetBytes(relativePath));
+            using var stream = File.OpenRead(path);
+            int read;
+            while ((read = stream.Read(buffer, 0, buffer.Length)) > 0) hash.AppendData(buffer, 0, read);
+        }
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant()[..16];
+    }
+
+    private static async Task RefreshAssetCacheAsync(CoreWebView2 core, string dataFolder, string contentVersion)
+    {
+        var markerPath = Path.Combine(dataFolder, "asset-version.txt");
+        string? previousVersion = null;
+        try { if (File.Exists(markerPath)) previousVersion = await File.ReadAllTextAsync(markerPath); }
+        catch { }
+        if (string.Equals(previousVersion?.Trim(), contentVersion, StringComparison.Ordinal)) return;
+        try { await core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.DiskCache); }
+        catch { }
+        try
+        {
+            Directory.CreateDirectory(dataFolder);
+            await File.WriteAllTextAsync(markerPath, contentVersion, new UTF8Encoding(false));
+        }
+        catch { }
     }
 
     private async void HandleWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -188,21 +226,54 @@ internal sealed class MainForm : Form
     {
         if (_allowClose || !_pageReady) return;
         e.Cancel = true;
+        if (_closeCheckInProgress) return;
+        _closeCheckInProgress = true;
         try
         {
-            var result = await _webView.CoreWebView2.ExecuteScriptAsync(
-                "Boolean(window.MDViewer && MDViewer.app && MDViewer.app.getPort('files').hasUnsavedChanges())");
-            if (result == "true")
+            var savePending = false;
+            for (var attempt = 0; attempt < 600; attempt++)
             {
+                var pendingResult = await _webView.CoreWebView2.ExecuteScriptAsync(
+                    "(function(){var f=window.MDViewer&&MDViewer.app&&MDViewer.app.getPort('files');return Boolean(f&&typeof f.isSavePending==='function'&&f.isSavePending());})()");
+                savePending = pendingResult == "true";
+                if (!savePending) break;
+                await Task.Delay(50);
+            }
+            if (savePending)
+            {
+                MessageBox.Show(this, "文件保存时间过长，尚未完成。请稍后再退出。", "MD Viewer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var namesResult = await _webView.CoreWebView2.ExecuteScriptAsync(
+                "(function(){var f=window.MDViewer&&MDViewer.app&&MDViewer.app.getPort('files');" +
+                "if(!f)return [];if(typeof f.getUnsavedFileNames==='function')return f.getUnsavedFileNames();" +
+                "return f.hasUnsavedChanges()?['当前文档']:[];})()");
+            var unsavedNames = JsonSerializer.Deserialize<string[]>(namesResult) ?? Array.Empty<string>();
+            if (unsavedNames.Length > 0)
+            {
+                var visibleNames = unsavedNames.Take(8).Select(name => "• " + name).ToList();
+                if (unsavedNames.Length > visibleNames.Count)
+                    visibleNames.Add($"• 以及其他 {unsavedNames.Length - visibleNames.Count} 个文件");
                 var answer = MessageBox.Show(this,
-                    "仍有未保存的更改。是否放弃更改并退出？\n\n选择“否”可返回继续保存。",
+                    "以下文件仍有未保存的更改：\n\n" + string.Join("\n", visibleNames) +
+                    "\n\n是否放弃这些更改并退出？\n选择“否”可返回继续保存。",
                     "MD Viewer", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
                 if (answer != DialogResult.Yes) return;
             }
+            _allowClose = true;
+            Close();
         }
-        catch { }
-        _allowClose = true;
-        Close();
+        catch (Exception error)
+        {
+            MessageBox.Show(this, "无法确认文档保存状态，已取消退出。\n\n" + error.Message,
+                "MD Viewer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _closeCheckInProgress = false;
+        }
     }
 
     private void Reply(string? id, object? data = null, string? error = null)

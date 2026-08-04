@@ -22,6 +22,7 @@
     let serverWatchTimer = null;
     let serverWatchBusy = false;
     let serverMtime = null;
+    let pendingSave = null;
 
     function emit(name, payload) { context.emit(name, payload); }
     function setState(key, value) {
@@ -57,12 +58,14 @@
     function updateActiveContent(content, meta) {
       const file = getActiveFile();
       if (!file) return false;
+      const wasModified = file.content !== file.savedContent;
       file.content = String(content || '');
       const nextModified = file.content !== file.savedContent;
       setState('modified', nextModified);
       markSessionDirty();
       emit('file:content-updated', { file: file, content: file.content, modified: nextModified, meta: meta || null });
       emit('file:modified', { file: file, modified: nextModified });
+      if (wasModified !== nextModified) publishList();
       return true;
     }
 
@@ -75,12 +78,14 @@
     async function replaceActiveContent(content, meta) {
       const file = getActiveFile();
       if (!file) return false;
+      const wasModified = file.content !== file.savedContent;
       file.content = String(content || '');
       const nextModified = file.content !== file.savedContent;
       setState('modified', nextModified);
       editor.replaceDocument(file.content, meta || { source: 'files' });
       markSessionDirty();
       emit('file:modified', { file: file, modified: nextModified });
+      if (wasModified !== nextModified) publishList();
       return true;
     }
 
@@ -194,7 +199,13 @@
       return true;
     }
 
-    async function saveFile() {
+    function saveFile() {
+      if (pendingSave) return pendingSave;
+      pendingSave = performSave().finally(function() { pendingSave = null; });
+      return pendingSave;
+    }
+
+    async function performSave() {
       const file = getActiveFile();
       const content = editor.getContent({ flush: true });
       if (file) {
@@ -235,14 +246,20 @@
         link.href = URL.createObjectURL(blob); link.download = file ? file.name : 'document.md'; link.click();
         URL.revokeObjectURL(link.href);
       }
+      let modifiedAfterSave = false;
       if (file) {
         file.savedContent = content;
+        file.content = getCurrentContent(file);
+        modifiedAfterSave = file.content !== file.savedContent;
         if (savedToHandle) {
-          emit('file:metadata-changed', { file: file, index: activeFileIndex });
+          emit('file:metadata-changed', { file: file, index: openFiles.indexOf(file) });
         }
+        if (file === getActiveFile()) setState('modified', modifiedAfterSave);
+        emit('file:modified', { file: file, modified: modifiedAfterSave });
       }
-      setState('modified', false); markSessionDirty();
-      emit('document:saved', { file: file, content: content }); publishList();
+      markSessionDirty();
+      emit('document:saved', { file: file, content: content, modified: modifiedAfterSave });
+      publishList();
       return true;
     }
 
@@ -602,18 +619,26 @@
       return api;
     }
 
-    function hasUnsavedChanges() {
+    function getUnsavedFileNames() {
       const active = getActiveFile();
       if (active && editor) active.content = editor.getContent({ flush: true });
-      return openFiles.some(function(file) { return file.content !== file.savedContent; });
+      return openFiles.filter(function(file) { return file.content !== file.savedContent; })
+        .map(function(file) { return file.name; });
     }
+
+    function hasUnsavedChanges() {
+      return getUnsavedFileNames().length > 0;
+    }
+
+    function isSavePending() { return Boolean(pendingSave); }
 
     const api = Object.freeze({
       start: start, openFile: openFile, addFile: addFile, addFiles: addFiles,
       openDesktopFile: openDesktopFile, openDesktopFiles: openDesktopFiles,
       reloadFile: reloadFile, saveFile: saveFile, switchFile: switchFile, closeFile: closeFile,
       listFiles: listFiles, getActiveFile: getActiveFile, getActiveIndex: getActiveIndex,
-      hasUnsavedChanges: hasUnsavedChanges,
+      hasUnsavedChanges: hasUnsavedChanges, getUnsavedFileNames: getUnsavedFileNames,
+      isSavePending: isSavePending,
       updateActiveContent: updateActiveContent, getCurrentContent: getCurrentContent,
       replaceActiveContent: replaceActiveContent, setModified: setModified,
       relinkCurrentFile: relinkCurrentFile, markSessionDirty: markSessionDirty,
