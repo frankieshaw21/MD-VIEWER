@@ -199,30 +199,21 @@
       return true;
     }
 
-    function saveFile() {
+    function runSave(task) {
       if (pendingSave) return pendingSave;
-      pendingSave = performSave().finally(function() { pendingSave = null; });
+      pendingSave = task().finally(function() { pendingSave = null; });
       return pendingSave;
     }
 
-    async function performSave() {
-      const file = getActiveFile();
-      const content = editor.getContent({ flush: true });
-      if (file) {
-        file.content = content;
-        await history.createHistorySnapshot(file, '保存前磁盘版本', file.savedContent);
-        await history.createHistorySnapshot(file, '保存版本', content);
-      }
+    function saveFile() { return runSave(performSave); }
+    function saveAll() { return runSave(performSaveAll); }
+
+    async function saveContent(file, content) {
       let savedToHandle = false;
       if (file && file.desktopPath && desktop.available) {
-        try {
-          const metadata = await desktop.writeFile(file.desktopPath, content);
-          file.lastModified = metadata.lastModified; file.fileSize = metadata.size;
-          savedToHandle = true;
-        } catch (error) {
-          alert('保存失败：' + error.message);
-          return false;
-        }
+        const metadata = await desktop.writeFile(file.desktopPath, content);
+        file.lastModified = metadata.lastModified; file.fileSize = metadata.size;
+        savedToHandle = true;
       }
       if (!savedToHandle && file && file.handle) {
         try {
@@ -246,12 +237,22 @@
         link.href = URL.createObjectURL(blob); link.download = file ? file.name : 'document.md'; link.click();
         URL.revokeObjectURL(link.href);
       }
+      return { savedToHandle: savedToHandle, downloaded: !savedToHandle };
+    }
+
+    async function createSaveHistory(file, content) {
+      if (!file) return;
+      await history.createHistorySnapshot(file, '保存前磁盘版本', file.savedContent);
+      await history.createHistorySnapshot(file, '保存版本', content);
+    }
+
+    function completeSuccessfulSave(file, content, destination, refreshActiveContent) {
       let modifiedAfterSave = false;
       if (file) {
         file.savedContent = content;
-        file.content = getCurrentContent(file);
+        if (refreshActiveContent && file === getActiveFile()) file.content = getCurrentContent(file);
         modifiedAfterSave = file.content !== file.savedContent;
-        if (savedToHandle) {
+        if (destination.savedToHandle) {
           emit('file:metadata-changed', { file: file, index: openFiles.indexOf(file) });
         }
         if (file === getActiveFile()) setState('modified', modifiedAfterSave);
@@ -260,7 +261,99 @@
       markSessionDirty();
       emit('document:saved', { file: file, content: content, modified: modifiedAfterSave });
       publishList();
-      return true;
+      return modifiedAfterSave;
+    }
+
+    function completeFailedSave(file) {
+      const modified = Boolean(file && file.content !== file.savedContent);
+      if (file === getActiveFile()) setState('modified', modified);
+      if (file) emit('file:modified', { file: file, modified: modified });
+      markSessionDirty();
+      publishList();
+      return modified;
+    }
+
+    function saveErrorMessage(error) {
+      return error && error.message ? error.message : String(error || '未知错误');
+    }
+
+    async function performSave() {
+      const file = getActiveFile();
+      const content = editor.getContent({ flush: true });
+      if (file) file.content = content;
+      try {
+        await createSaveHistory(file, content);
+        const destination = await saveContent(file, content);
+        completeSuccessfulSave(file, content, destination, true);
+        return true;
+      } catch (error) {
+        completeFailedSave(file);
+        alert('保存失败：' + saveErrorMessage(error));
+        return false;
+      }
+    }
+
+    async function performSaveAll() {
+      const active = getActiveFile();
+      if (active && editor) active.content = editor.getContent({ flush: true });
+      const targets = openFiles.reduce(function(result, file, index) {
+        if (file.content !== file.savedContent) {
+          result.push({ file: file, index: index, content: String(file.content || '') });
+        }
+        return result;
+      }, []);
+      const summary = { total: targets.length, succeeded: 0, failed: 0, downloaded: 0, failures: [] };
+      emit('files:save-all-started', {
+        total: summary.total,
+        files: targets.map(function(target) {
+          return { file: target.file, index: target.index, name: target.file.name };
+        })
+      });
+
+      for (const target of targets) {
+        let destination = null;
+        let failure = null;
+        try {
+          await createSaveHistory(target.file, target.content);
+          destination = await saveContent(target.file, target.content);
+          completeSuccessfulSave(target.file, target.content, destination, false);
+          summary.succeeded++;
+          if (destination.downloaded) summary.downloaded++;
+        } catch (error) {
+          completeFailedSave(target.file);
+          failure = {
+            file: target.file,
+            index: target.index,
+            name: target.file.name,
+            error: error,
+            message: saveErrorMessage(error)
+          };
+          summary.failures.push(failure);
+          summary.failed++;
+        }
+        emit('files:save-all-progress', {
+          total: summary.total,
+          completed: summary.succeeded + summary.failed,
+          succeeded: summary.succeeded,
+          failed: summary.failed,
+          downloaded: summary.downloaded,
+          file: target.file,
+          index: target.index,
+          name: target.file.name,
+          status: failure ? 'failed' : 'succeeded',
+          failure: failure,
+          wasDownloaded: Boolean(destination && destination.downloaded)
+        });
+      }
+
+      emit('files:save-all-completed', summary);
+      if (summary.failed) {
+        alert('批量保存完成：成功 ' + summary.succeeded + ' 个，失败 ' + summary.failed + ' 个。\n' +
+          summary.failures.map(function(failure) {
+            return failure.name + '：' + failure.message;
+          }).join('\n'));
+      }
+      return summary;
     }
 
     async function reloadFile() {
@@ -635,7 +728,8 @@
     const api = Object.freeze({
       start: start, openFile: openFile, addFile: addFile, addFiles: addFiles,
       openDesktopFile: openDesktopFile, openDesktopFiles: openDesktopFiles,
-      reloadFile: reloadFile, saveFile: saveFile, switchFile: switchFile, closeFile: closeFile,
+      reloadFile: reloadFile, saveFile: saveFile, saveAll: saveAll,
+      switchFile: switchFile, closeFile: closeFile,
       listFiles: listFiles, getActiveFile: getActiveFile, getActiveIndex: getActiveIndex,
       hasUnsavedChanges: hasUnsavedChanges, getUnsavedFileNames: getUnsavedFileNames,
       isSavePending: isSavePending,

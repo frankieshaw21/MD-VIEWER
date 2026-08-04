@@ -42,7 +42,8 @@
           supportsFileSystemAccess: typeof win.showOpenFilePicker === 'function'
         },
         state: {
-          isSourceMode: false, theme: 'light', contentWidth: 'standard', modified: false,
+          viewMode: 'preview', isSourceMode: false, isSplitMode: false,
+          theme: 'light', contentWidth: 'standard', modified: false,
           previewDirty: false, sessionDirty: false, ready: false, activeFileIndex: -1
         }
       });
@@ -73,6 +74,9 @@
         editor: byId('editor'), sourceEditor: byId('sourceEditor'), textColors: colors
       }));
       nextContext.registerPort('ui', namespace.UI.create({ context: nextContext }));
+      nextContext.registerPort('sourceTools', namespace.SourceTools.create({ context: nextContext }));
+      nextContext.registerPort('search', namespace.Search.create({ context: nextContext }));
+      nextContext.registerPort('mermaidTools', namespace.MermaidTools.create({ context: nextContext }));
       context = nextContext;
       namespace.app = context;
       composed = true;
@@ -84,8 +88,8 @@
       if (bridged) return;
       bridged = true;
       const editorNames = ['fmt','insertHeading','insertCodeBlock','insertLink','insertImage','insertQuote',
-        'insertChecklist','insertTable','insertHR','insertMermaid','toggleSource'];
-      const fileNames = ['openFile','reloadFile','saveFile','switchFile','closeFile','relinkCurrentFile',
+        'insertChecklist','insertTable','insertHR','insertMermaid','toggleSource','toggleSplit'];
+      const fileNames = ['openFile','reloadFile','saveFile','saveAll','switchFile','closeFile','relinkCurrentFile',
         'closeFileBrowser','fbGoUp','fbNavigate'];
       const uiNames = ['toggleSidebar','switchTab','scrollToHeading','toggleTextColorPalette','toggleContentWidth','toggleTheme','copyCode'];
       editorNames.forEach(function(name) {
@@ -111,7 +115,10 @@
           registrations.forEach(function(registration) { registration.unregister(); });
         }).catch(function() {});
       }
+      context.getPort('sourceTools').start();
       context.getPort('editor').start();
+      context.getPort('search').start();
+      context.getPort('mermaidTools').start();
       context.getPort('ui').start();
       Promise.resolve(context.getPort('files').start()).then(function() {
         const previous = context.state.get('ready');

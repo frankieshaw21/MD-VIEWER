@@ -8,7 +8,7 @@
     if (!context || typeof context.getPort !== 'function') throw new TypeError('UI requires context');
 
     let started = false;
-    let editor, files, history;
+    let editor, files, history, search, sourceTools, mermaidTools;
     let minimapFrame = null;
     let minimapUpdateFrame = null;
     let headingTrackingTimer = null;
@@ -185,7 +185,7 @@
     function updateMinimap() {
       const minimap = document.getElementById('minimap'); const thumb = document.getElementById('minimapThumb');
       const total = wrapper.scrollHeight; const visible = wrapper.clientHeight;
-      if (total <= visible || context.state.get('isSourceMode')) { thumb.style.display = 'none'; return; }
+      if (total <= visible || context.state.get('viewMode') === 'source') { thumb.style.display = 'none'; return; }
       thumb.style.display = '';
       const height = Math.max(20, visible / total * minimap.clientHeight);
       thumb.style.height = height + 'px';
@@ -292,12 +292,24 @@
       document.addEventListener('keydown', function(event) {
         const key = event.key.toLowerCase();
         if (event.key === 'Escape') {
+          if (mermaidTools && mermaidTools.closeFullscreen()) return;
+          if (sourceTools && sourceTools.closeGoToLine()) return;
+          if (search && search.close()) return;
           hideTextColorPalette(); document.getElementById('lightbox').classList.remove('active');
           files.closeFileBrowser(); history.closeHistory();
+          return;
         }
-        if (!event.ctrlKey) return;
+        if (!event.ctrlKey && !event.metaKey) return;
         if (key === 'o') { event.preventDefault(); files.openFile(); }
+        else if (key === 's' && event.shiftKey) { event.preventDefault(); files.saveAll().catch(console.error); }
         else if (key === 's') { event.preventDefault(); files.saveFile().catch(console.error); }
+        else if (key === 'f') { event.preventDefault(); search.open(false); }
+        else if (key === 'h') { event.preventDefault(); search.open(true); }
+        else if (key === 'g') {
+          event.preventDefault();
+          if (editor.getViewMode() === 'preview') editor.toggleSource();
+          global.setTimeout(function() { sourceTools.openGoToLine(); }, 0);
+        }
         else if (key === 'r') { event.preventDefault(); files.reloadFile(); }
         else if (key === '/') { event.preventDefault(); editor.invoke('toggleSource'); }
         else if (key === 'p') { event.preventDefault(); global.print(); }
@@ -312,6 +324,21 @@
       context.on('file:modified', renderModified);
       context.on('file:metadata-changed', renderMetadata);
       context.on('document:saved', showSaved);
+      context.on('files:save-all-started', function(payload) {
+        context.elements.modifiedIndicator.textContent = payload.total
+          ? '正在保存全部文件 0/' + payload.total : '没有需要保存的文件';
+      });
+      context.on('files:save-all-progress', function(payload) {
+        context.elements.modifiedIndicator.textContent = '正在保存全部文件 ' + payload.completed + '/' + payload.total;
+      });
+      context.on('files:save-all-completed', function(payload) {
+        context.elements.modifiedIndicator.textContent = payload.failed
+          ? '批量保存完成，失败 ' + payload.failed + ' 个' : payload.total ? '全部文件已保存' : '';
+        if (!payload.failed && payload.total) global.setTimeout(function() {
+          const active = files.getActiveFile();
+          context.elements.modifiedIndicator.textContent = active && active.content !== active.savedContent ? '已修改' : '';
+        }, 1800);
+      });
       context.on('permission:changed', function(payload) { renderPermission(payload.file); });
       context.on('file:external-conflict', function() { context.elements.modifiedIndicator.textContent = '有未保存修改（磁盘文件也已更新）'; });
       context.on('document:changed', editor.scheduleOutline);
@@ -324,7 +351,10 @@
     function start() {
       if (started) return api;
       editor = context.getPort('editor'); files = context.getPort('files'); history = context.getPort('history');
-      if (!editor || !files || !history) throw new Error('UI dependencies are incomplete');
+      search = context.getPort('search'); sourceTools = context.getPort('sourceTools'); mermaidTools = context.getPort('mermaidTools');
+      if (!editor || !files || !history || !search || !sourceTools || !mermaidTools) {
+        throw new Error('UI dependencies are incomplete');
+      }
       editorEl = context.elements.editor; sourceEditor = context.elements.sourceEditor;
       wrapper = document.getElementById('editorWrapper'); sidebar = context.elements.sidebar;
       fileList = context.elements.fileList; outlineList = context.elements.outlineList;

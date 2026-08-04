@@ -15,6 +15,11 @@
     let observerPaused = false;
     let observerTimer = null;
     let outlineTimer = null;
+    let splitRenderTimer = null;
+    let splitScrollFrame = null;
+    let splitIgnoredElement = null;
+    let splitIgnoredTop = 0;
+    let splitIgnoreTimer = null;
     let composing = false;
     let lastActivityAt = 0;
     let mermaidLoaded = false;
@@ -41,7 +46,31 @@
     }
     function currentFile() { return files().getActiveFile(); }
     function currentIndex() { return files().getActiveIndex(); }
-    function isSourceMode() { return Boolean(context.state.get('isSourceMode')); }
+    function getViewMode() {
+      const mode = context.state.get('viewMode');
+      if (mode === 'preview' || mode === 'source' || mode === 'split') return mode;
+      return context.state.get('isSourceMode') ? 'source' : 'preview';
+    }
+    function isSourceMode() { return getViewMode() !== 'preview'; }
+    function isSplitMode() { return getViewMode() === 'split'; }
+    function isSourceOnlyMode() { return getViewMode() === 'source'; }
+    function applyViewMode(mode) {
+      const normalized = mode === 'source' || mode === 'split' ? mode : 'preview';
+      setState('viewMode', normalized);
+      setState('isSourceMode', normalized !== 'preview');
+      setState('isSplitMode', normalized === 'split');
+      document.body.classList.toggle('source-mode', normalized !== 'preview');
+      document.body.classList.toggle('split-mode', normalized === 'split');
+      const sourceButton = document.getElementById('sourceBtn');
+      const splitButton = document.getElementById('splitBtn');
+      if (sourceButton) {
+        sourceButton.classList.toggle('active', normalized !== 'preview');
+        sourceButton.textContent = normalized === 'preview' ? '源码' : '预览';
+      }
+      if (splitButton) splitButton.classList.toggle('active', normalized === 'split');
+      if (editorEl) editorEl.setAttribute('contenteditable', normalized === 'preview' ? 'true' : 'false');
+      return normalized;
+    }
     function isPreviewDirty() { return Boolean(context.state.get('previewDirty')); }
     function setPreviewDirty(value) { return setState('previewDirty', Boolean(value)); }
     function updateCounts() {
@@ -90,6 +119,7 @@
     }
 
     function schedulePreviewSync() {
+      if (isSplitMode()) return;
       setPreviewDirty(true);
       lastActivityAt = Date.now();
       cancelFlush();
@@ -279,7 +309,9 @@
         ensureMermaidStickyScrollbar(target);
         return svg;
       }
-      svg.style.width = Math.round(naturalWidth * 100) / 100 + 'px';
+      const scaleValue = Number(target.dataset.mermaidScale);
+      const scale = Number.isFinite(scaleValue) && scaleValue > 0 ? scaleValue : 1;
+      svg.style.width = Math.round(naturalWidth * scale * 100) / 100 + 'px';
       svg.style.height = 'auto';
       svg.style.maxWidth = 'none';
       svg.style.display = 'block';
@@ -388,15 +420,26 @@
       return normalized;
     }
 
+    function cancelSplitRender() {
+      if (splitRenderTimer) {
+        clearTimeout(splitRenderTimer);
+        splitRenderTimer = null;
+      }
+    }
+
     function replaceDocument(content, meta) {
       const value = String(content || '');
+      cancelSplitRender();
       cancelFlush();
       setPreviewDirty(false);
-      if (isSourceMode()) sourceEditor.value = value;
+      if (isSplitMode()) {
+        sourceEditor.value = value;
+        loadMarkdown(value, meta);
+      } else if (isSourceMode()) sourceEditor.value = value;
       else loadMarkdown(value, meta);
       updateCounts();
       scheduleOutline();
-      emit('document:replaced', { content: value, mode: isSourceMode() ? 'source' : 'preview', meta: meta || null });
+      emit('document:replaced', { content: value, mode: getViewMode(), meta: meta || null });
       return true;
     }
 
@@ -405,35 +448,122 @@
     }
 
     function showEmpty() {
+      cancelSplitRender();
       cancelFlush();
       setPreviewDirty(false);
       sourceEditor.value = '';
       editorEl.innerHTML = '<div class="welcome"><div class="welcome-icon">📝</div><h2>Markdown Editor</h2><p><kbd>Ctrl+O</kbd> 打开文件&emsp;<kbd>Ctrl+S</kbd> 保存&emsp;<kbd>Ctrl+/</kbd> 源码模式</p></div>';
       updateCounts();
-      emit('document:replaced', { content: '', empty: true });
+      updateOutline();
+      emit('document:replaced', { content: '', mode: getViewMode(), empty: true });
     }
 
-    function toggleSource() {
+    function getScrollRatio(element) {
+      if (!element) return 0;
+      const scrollable = Math.max(0, element.scrollHeight - element.clientHeight);
+      return scrollable > 0 ? Math.max(0, Math.min(1, element.scrollTop / scrollable)) : 0;
+    }
+
+    function restoreScrollRatio(element, ratio) {
+      if (!element) return;
+      const normalized = Math.max(0, Math.min(1, Number(ratio) || 0));
+      const apply = function() {
+        element.scrollTop = normalized * Math.max(0, element.scrollHeight - element.clientHeight);
+      };
+      apply();
+      global.requestAnimationFrame(apply);
+    }
+
+    function sourcePositionAtRatio(content, ratio) {
+      const value = String(content || '');
+      if (!value || ratio <= 0) return 0;
+      if (ratio >= 1) return value.length;
+      const approximate = Math.round(value.length * ratio);
+      return value.lastIndexOf('\n', Math.max(0, approximate - 1)) + 1;
+    }
+
+    function scheduleSplitScroll(from, to) {
+      if (!isSplitMode()) return;
+      if (splitIgnoredElement === from) {
+        const generated = Math.abs(from.scrollTop - splitIgnoredTop) <= 1;
+        splitIgnoredElement = null;
+        if (splitIgnoreTimer) { clearTimeout(splitIgnoreTimer); splitIgnoreTimer = null; }
+        if (generated) return;
+      }
+      const ratio = getScrollRatio(from);
+      if (splitScrollFrame !== null) clearTimeout(splitScrollFrame);
+      splitScrollFrame = global.setTimeout(function() {
+        splitScrollFrame = null;
+        if (!isSplitMode()) return;
+        const nextTop = ratio * Math.max(0, to.scrollHeight - to.clientHeight);
+        splitIgnoredElement = to;
+        splitIgnoredTop = nextTop;
+        to.scrollTop = nextTop;
+        if (splitIgnoreTimer) clearTimeout(splitIgnoreTimer);
+        splitIgnoreTimer = setTimeout(function() {
+          splitIgnoredElement = null;
+          splitIgnoreTimer = null;
+        }, 120);
+      });
+    }
+
+    function changeViewMode(nextMode) {
+      const previousMode = getViewMode();
+      const normalized = nextMode === 'source' || nextMode === 'split' ? nextMode : 'preview';
+      if (previousMode === normalized) return normalized;
       if (tables) tables.hideTableCellTools();
       const ui = context.getPort('ui');
       if (ui) ui.hideTextColorPalette();
-      const sourceMode = isSourceMode();
+      cancelSplitRender();
+
       let content;
-      if (!sourceMode) {
-        content = flushPreviewChanges();
+      let scrollRatio;
+      if (normalized === 'preview') {
+        content = previousMode === 'preview' ? flushPreviewChanges() : sourceEditor.value;
         if (content === undefined) content = getContent({ flush: false });
-      } else content = sourceEditor.value;
-      const nextMode = !sourceMode;
-      setState('isSourceMode', nextMode);
-      document.body.classList.toggle('source-mode', nextMode);
-      const button = document.getElementById('sourceBtn');
-      if (button) button.classList.toggle('active', nextMode);
-      if (nextMode) { sourceEditor.value = content || ''; sourceEditor.focus(); }
-      else loadMarkdown(content || '', { source: 'mode-switch' });
+        scrollRatio = getScrollRatio(previousMode === 'preview' ? editorWrapper : sourceEditor);
+        applyViewMode('preview');
+        sourceEditor.blur();
+        loadMarkdown(content || '', { source: 'mode-switch', from: previousMode, to: normalized });
+        restoreScrollRatio(editorWrapper, scrollRatio);
+      } else {
+        scrollRatio = getScrollRatio(previousMode === 'source' ? sourceEditor : editorWrapper);
+        if (previousMode === 'preview') {
+          content = flushPreviewChanges();
+          if (content === undefined) content = getContent({ flush: false });
+        } else content = sourceEditor.value;
+        sourceEditor.value = content || '';
+        applyViewMode(normalized);
+        if (normalized === 'split') {
+          loadMarkdown(sourceEditor.value, { source: 'mode-switch', from: previousMode, to: normalized });
+          restoreScrollRatio(editorWrapper, scrollRatio);
+        } else editorWrapper.scrollTop = 0;
+        const position = sourcePositionAtRatio(sourceEditor.value, scrollRatio);
+        sourceEditor.scrollTop = 0;
+        sourceEditor.setSelectionRange(position, position);
+        try { sourceEditor.focus({ preventScroll: true }); }
+        catch (error) { sourceEditor.focus(); }
+        restoreScrollRatio(sourceEditor, scrollRatio);
+      }
       updateCounts();
       updateOutline();
-      emit('mode:changed', { sourceMode: nextMode, content: content || '' });
-      return nextMode;
+      emit('mode:changed', {
+        viewMode: normalized,
+        sourceMode: normalized !== 'preview',
+        splitMode: normalized === 'split',
+        content: content || ''
+      });
+      return normalized;
+    }
+
+    function toggleSource() {
+      changeViewMode(getViewMode() === 'preview' ? 'source' : 'preview');
+      return isSourceMode();
+    }
+
+    function toggleSplit() {
+      changeViewMode(isSplitMode() ? 'preview' : 'split');
+      return isSplitMode();
     }
 
     function sourceInsert(before, after, placeholder) {
@@ -708,7 +838,7 @@
     }
 
     function updateActiveHeading() {
-      if (isSourceMode() || !outlineList || !editorWrapper) return;
+      if (isSourceOnlyMode() || !outlineList || !editorWrapper) return;
       const headings = editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6');
       let active = 0;
       const top = editorWrapper.getBoundingClientRect().top;
@@ -724,15 +854,18 @@
 
     function bind() {
       editorEl.addEventListener('input', function() {
+        if (isSplitMode()) return;
         if (tables) tables.clearCellBackgroundHistory();
         schedulePreviewSync(); history.scheduleHistorySnapshot();
       });
       editorEl.addEventListener('change', function(event) {
-        if (event.target.matches('input[type="checkbox"]')) schedulePreviewSync();
+        if (!isSplitMode() && event.target.matches('input[type="checkbox"]')) schedulePreviewSync();
       });
       sourceEditor.addEventListener('compositionstart', function() { composing = true; });
       sourceEditor.addEventListener('compositionend', function() { composing = false; sourceChanged(); });
       sourceEditor.addEventListener('input', function() { if (!composing) sourceChanged(); });
+      sourceEditor.addEventListener('scroll', function() { scheduleSplitScroll(sourceEditor, editorWrapper); });
+      editorWrapper.addEventListener('scroll', function() { scheduleSplitScroll(editorWrapper, sourceEditor); });
       document.addEventListener('selectionchange', rememberSelection);
       const pendingRoots = new Set();
       let enhancementScheduled = false;
@@ -769,10 +902,20 @@
       const content = sourceEditor.value;
       lastActivityAt = Date.now();
       files().updateActiveContent(content, { source: 'source' });
+      if (isSplitMode()) {
+        cancelSplitRender();
+        splitRenderTimer = setTimeout(function() {
+          splitRenderTimer = null;
+          if (!isSplitMode()) return;
+          const previewRatio = getScrollRatio(editorWrapper);
+          loadMarkdown(sourceEditor.value, { source: 'split-source', debounced: true });
+          restoreScrollRatio(editorWrapper, previewRatio);
+        }, 180);
+      }
       updateCounts();
       scheduleOutline();
       history.scheduleHistorySnapshot();
-      emit('document:changed', { content: content, mode: 'source', composing: composing });
+      emit('document:changed', { content: content, mode: isSplitMode() ? 'split' : 'source', composing: composing });
     }
 
     function canPersistSession() {
@@ -791,8 +934,9 @@
       tables = context.getPort('tables');
       history = context.getPort('history');
       if (!editorEl || !sourceEditor || !parser || !history) throw new Error('Editor dependencies are incomplete');
+      const initialViewMode = getViewMode();
       started = true;
-      setState('isSourceMode', Boolean(context.state.get('isSourceMode')));
+      applyViewMode(initialViewMode);
       setPreviewDirty(Boolean(context.state.get('previewDirty')));
       bind();
       if (global.ResizeObserver) {
@@ -809,12 +953,13 @@
       fmt: fmt, insertHeading: insertHeading, insertCodeBlock: insertCodeBlock,
       insertLink: insertLink, insertImage: insertImage, insertQuote: insertQuote,
       insertChecklist: insertChecklist, insertTable: insertTable, insertHR: insertHR,
-      insertMermaid: insertMermaid, toggleSource: toggleSource,
+      insertMermaid: insertMermaid, toggleSource: toggleSource, toggleSplit: toggleSplit,
       loadMarkdown: loadMarkdown, render: loadMarkdown, replaceDocument: replaceDocument, setContent: setContent,
       showEmpty: showEmpty, getContent: getContent, schedulePreviewSync: schedulePreviewSync,
       flushPreviewChanges: flushPreviewChanges, enhanceRenderedContent: enhanceRenderedContent,
       captureColorSelection: captureColorSelection, applyTextColor: applyTextColor,
-      rememberSelection: rememberSelection, isSourceMode: isSourceMode,
+      rememberSelection: rememberSelection, isSourceMode: isSourceMode, isSplitMode: isSplitMode,
+      getViewMode: getViewMode,
       getOutline: getOutline, updateOutline: updateOutline, scheduleOutline: scheduleOutline,
       scrollToHeading: scrollToHeading, updateActiveHeading: updateActiveHeading
     };
@@ -828,7 +973,9 @@
       getContent: getContent, setContent: setContent, replaceContent: replaceDocument, replaceDocument: replaceDocument,
       load: loadMarkdown, render: loadMarkdown, flush: flushPreviewChanges, schedule: schedulePreviewSync,
       showEmpty: showEmpty, schedulePreviewSync: schedulePreviewSync, flushPreviewChanges: flushPreviewChanges,
-      isSourceMode: isSourceMode, canPersistSession: canPersistSession,
+      toggleSource: toggleSource, toggleSplit: toggleSplit,
+      isSourceMode: isSourceMode, isSplitMode: isSplitMode, getViewMode: getViewMode,
+      canPersistSession: canPersistSession,
       getOutline: getOutline, updateOutline: updateOutline, scheduleOutline: scheduleOutline,
       scrollToHeading: scrollToHeading, updateActiveHeading: updateActiveHeading,
       captureColorSelection: captureColorSelection, applyTextColor: applyTextColor,
