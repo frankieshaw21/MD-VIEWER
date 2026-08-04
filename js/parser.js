@@ -428,7 +428,7 @@ function cloneTableForExport(table) {
   clone.removeAttribute('data-md-raw-table');
   clone.querySelectorAll('script,iframe,object,embed,form,meta,link,style').forEach(element => element.remove());
   clone.querySelectorAll('*').forEach(element => {
-    element.classList.remove('table-cell-selected');
+    element.classList.remove('table-cell-selected', 'table-cell-multi-selected', 'table-cell-selection-anchor');
     if (!element.className) element.removeAttribute('class');
     element.removeAttribute('contenteditable');
     element.removeAttribute('data-md-raw-table');

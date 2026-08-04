@@ -269,6 +269,11 @@
       if (sourceDocument) return setFeishuDocumentClipboard(event, sourceDocument, 'source');
       if (isSourceMode()) return false;
 
+      const selectedCells = typeof tables.getSelectedCells === 'function' ? tables.getSelectedCells() : [];
+      if (selectedCells.length > 1 && typeof tables.createSelectedTableClone === 'function') {
+        const selectedTable = tables.createSelectedTableClone();
+        if (selectedTable) return setFeishuTableClipboard(event, selectedTable, 'preview-range');
+      }
       const selection = win.getSelection();
       const activeCell = tables.getActiveCell();
       const table = activeCell && activeCell.closest('table');

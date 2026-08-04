@@ -627,6 +627,15 @@ body.dark #editor .table-wrapper::-webkit-scrollbar-thumb { background: rgba(255
   box-shadow: inset 0 0 0 9999px rgba(74,144,217,0.08);
   transition: outline-color 0.15s, box-shadow 0.15s;
 }
+#editor th.table-cell-multi-selected, #editor td.table-cell-multi-selected {
+  box-shadow: inset 0 0 0 9999px rgba(74,144,217,0.14);
+  outline: 1px solid rgba(74,144,217,0.65);
+  outline-offset: -1px;
+}
+#editor th.table-cell-selection-anchor, #editor td.table-cell-selection-anchor {
+  outline: 2px solid #4a90d9;
+  outline-offset: -2px;
+}
 .table-cell-tools {
   position: fixed;
   z-index: 180;
@@ -712,6 +721,13 @@ body.dark #editor .table-wrapper::-webkit-scrollbar-thumb { background: rgba(255
 body.dark #editor th.table-cell-selected, body.dark #editor td.table-cell-selected {
   outline-color: #6db3f8;
   box-shadow: inset 0 0 0 9999px rgba(109,179,248,0.10);
+}
+body.dark #editor th.table-cell-multi-selected, body.dark #editor td.table-cell-multi-selected {
+  outline-color: rgba(109,179,248,0.75);
+  box-shadow: inset 0 0 0 9999px rgba(109,179,248,0.18);
+}
+body.dark #editor th.table-cell-selection-anchor, body.dark #editor td.table-cell-selection-anchor {
+  outline-color: #6db3f8;
 }
 body.dark .table-cell-tools { background: rgba(38,40,43,0.98); border-color: #50545a; color: #d7dae0; box-shadow: 0 14px 38px rgba(0,0,0,0.42); }
 body.dark .table-tools-header { background: linear-gradient(135deg, #34373b, #2d3034); border-color: #494d52; }

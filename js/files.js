@@ -235,7 +235,12 @@
         link.href = URL.createObjectURL(blob); link.download = file ? file.name : 'document.md'; link.click();
         URL.revokeObjectURL(link.href);
       }
-      if (file) file.savedContent = content;
+      if (file) {
+        file.savedContent = content;
+        if (savedToHandle) {
+          emit('file:metadata-changed', { file: file, index: activeFileIndex });
+        }
+      }
       setState('modified', false); markSessionDirty();
       emit('document:saved', { file: file, content: content }); publishList();
       return true;

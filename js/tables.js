@@ -37,9 +37,16 @@
     const importedCssColorProbe = document.createElement('span');
     let feishuCellBackgroundCssTokens = null;
     let activeTableCell = null;
-    const cellBackgroundUndoStack = [];
-    const cellBackgroundRedoStack = [];
+    const selectedTableCells = new Set();
+    const tableUndoStack = [];
+    const tableRedoStack = [];
     const removers = [];
+    const TABLE_HISTORY_LIMIT = 50;
+    let selectionAnchorCell = null;
+    let dragStartCell = null;
+    let suppressSelectionClick = false;
+    let historyRestoring = false;
+    let tableHistoryArmed = false;
     let bound = false;
 
 
@@ -50,6 +57,45 @@
     function emitChanged(type) {
       schedulePreviewSync();
       notifyChanged(type);
+    }
+
+    function getCurrentMarkdown() {
+      return context.getPort('editor').getContent({ flush: true });
+    }
+
+    function captureTableHistory() {
+      if (historyRestoring) return;
+      const snapshot = getCurrentMarkdown();
+      if (tableUndoStack[tableUndoStack.length - 1] !== snapshot) {
+        tableUndoStack.push(snapshot);
+        if (tableUndoStack.length > TABLE_HISTORY_LIMIT) tableUndoStack.shift();
+      }
+      tableRedoStack.length = 0;
+      tableHistoryArmed = true;
+    }
+
+    function restoreTableHistory(source, destination, type) {
+      if (!source.length) return false;
+      const snapshot = source.pop();
+      const current = getCurrentMarkdown();
+      if (destination[destination.length - 1] !== current) {
+        destination.push(current);
+        if (destination.length > TABLE_HISTORY_LIMIT) destination.shift();
+      }
+      historyRestoring = true;
+      tableHistoryArmed = true;
+      Promise.resolve(context.getPort('files').replaceActiveContent(snapshot, { source: type }))
+        .finally(function() { historyRestoring = false; });
+      notifyChanged(type);
+      return true;
+    }
+
+    function undoTableEdit() {
+      return restoreTableHistory(tableUndoStack, tableRedoStack, 'table-undo');
+    }
+
+    function redoTableEdit() {
+      return restoreTableHistory(tableRedoStack, tableUndoStack, 'table-redo');
     }
 
     function normalizeImportedCssBackground(value) {
@@ -214,7 +260,8 @@
     function mergeTableCellRight() {
       const cell = activeTableCell;
       const target = getMergeRightTarget(cell);
-      if (!cell || !target) return false;
+      if (!cell || !target || selectedTableCells.size > 1) return false;
+      captureTableHistory();
       appendMergedCellContent(cell, target);
       cell.colSpan += target.colSpan;
       target.remove();
@@ -225,7 +272,8 @@
     function mergeTableCellDown() {
       const cell = activeTableCell;
       const target = getMergeDownTarget(cell);
-      if (!cell || !target) return false;
+      if (!cell || !target || selectedTableCells.size > 1) return false;
+      captureTableHistory();
       appendMergedCellContent(cell, target);
       cell.rowSpan += target.rowSpan;
       target.remove();
@@ -236,7 +284,8 @@
     function splitTableCell() {
       const cell = activeTableCell;
       const tableContext = getTableCellContext(cell);
-      if (!tableContext || (tableContext.origin.rowSpan === 1 && tableContext.origin.colSpan === 1)) return false;
+      if (!tableContext || selectedTableCells.size > 1 || (tableContext.origin.rowSpan === 1 && tableContext.origin.colSpan === 1)) return false;
+      captureTableHistory();
       const origin = tableContext.origin;
       cell.rowSpan = 1;
       cell.colSpan = 1;
@@ -268,7 +317,8 @@
 
     function insertTableRow(position) {
       const tableContext = getTableCellContext(activeTableCell);
-      if (!tableContext) return false;
+      if (!tableContext || selectedTableCells.size > 1) return false;
+      captureTableHistory();
       const cell = tableContext.cell;
       const section = cell.parentElement.parentElement;
       const sectionRows = Array.from(section.rows);
@@ -296,7 +346,8 @@
 
     function insertTableColumn(position) {
       const tableContext = getTableCellContext(activeTableCell);
-      if (!tableContext) return false;
+      if (!tableContext || selectedTableCells.size > 1) return false;
+      captureTableHistory();
       const boundary = Math.max(0, Math.min(getTableColumnCount(tableContext),
         position === 'left' ? tableContext.origin.col : tableContext.origin.col + tableContext.origin.colSpan));
       const rowsCoveredByExpandedCells = new Set();
@@ -333,7 +384,8 @@
 
     function deleteSelectedTableRow() {
       const tableContext = getTableCellContext(activeTableCell);
-      if (!tableContext || !canDeleteSelectedTableRow()) return false;
+      if (!tableContext || selectedTableCells.size > 1 || !canDeleteSelectedTableRow()) return false;
+      captureTableHistory();
       const table = tableContext.table;
       activeTableCell.parentElement.remove();
       hideTableCellTools();
@@ -368,7 +420,8 @@
 
     function deleteSelectedTableColumn() {
       const tableContext = getSelectedLogicalColumnContext();
-      if (!tableContext || !canDeleteSelectedTableColumn()) return false;
+      if (!tableContext || selectedTableCells.size > 1 || !canDeleteSelectedTableColumn()) return false;
+      captureTableHistory();
       new Set(tableContext.entries.map(function(entry) { return entry.cell; })).forEach(function(cell) { cell.remove(); });
       hideTableCellTools();
       if (!tableContext.table.querySelector('th,td')) {
@@ -385,6 +438,7 @@
     function deleteSelectedTable() {
       const table = activeTableCell && activeTableCell.closest('table');
       if (!table || !confirmAction('删除整个表格？')) return false;
+      captureTableHistory();
       hideTableCellTools();
       const wrapper = table.closest('.table-wrapper');
       (wrapper || table).remove();
@@ -449,6 +503,45 @@
       return clone;
     }
 
+    function createSelectedTableClone() {
+      const cells = getSelectedCells();
+      if (!cells.length) return null;
+      const table = cells[0].closest('table');
+      if (!table || cells.some(function(cell) { return cell.closest('table') !== table; })) return null;
+      const tableContext = buildTableGrid(table);
+      const origins = cells.map(function(cell) { return tableContext.origins.get(cell); }).filter(Boolean);
+      if (!origins.length) return null;
+      const top = Math.min.apply(Math, origins.map(function(origin) { return origin.row; }));
+      const left = Math.min.apply(Math, origins.map(function(origin) { return origin.col; }));
+      const bottom = Math.max.apply(Math, origins.map(function(origin) { return origin.row + origin.rowSpan - 1; }));
+      const right = Math.max.apply(Math, origins.map(function(origin) { return origin.col + origin.colSpan - 1; }));
+      const selected = new Set(cells);
+      const clone = document.createElement('table');
+      const body = clone.createTBody();
+      for (let row = top; row <= bottom; row++) {
+        const cloneRow = body.insertRow();
+        for (let column = left; column <= right; column++) {
+          const entry = tableContext.grid[row] && tableContext.grid[row][column];
+          if (!entry || !selected.has(entry.cell)) {
+            cloneRow.insertCell().innerHTML = '<br>';
+            continue;
+          }
+          const origin = tableContext.origins.get(entry.cell);
+          const firstRow = Math.max(top, origin.row);
+          const firstColumn = Math.max(left, origin.col);
+          if (row !== firstRow || column !== firstColumn) continue;
+          const cellClone = entry.cell.cloneNode(true);
+          cellClone.classList.remove('table-cell-selected', 'table-cell-multi-selected', 'table-cell-selection-anchor');
+          const rowSpan = Math.min(bottom + 1, origin.row + origin.rowSpan) - firstRow;
+          const colSpan = Math.min(right + 1, origin.col + origin.colSpan) - firstColumn;
+          if (rowSpan > 1) cellClone.rowSpan = rowSpan; else cellClone.removeAttribute('rowspan');
+          if (colSpan > 1) cellClone.colSpan = colSpan; else cellClone.removeAttribute('colspan');
+          cloneRow.appendChild(cellClone);
+        }
+      }
+      return clone;
+    }
+
     function getCellBackgroundState(cell) {
       return { token: (cell.getAttribute('background-color') || '').toLowerCase(), style: cell.style.backgroundColor || '' };
     }
@@ -469,57 +562,53 @@
     }
 
     function updateCellBackgroundPalette() {
-      const activeToken = activeTableCell ? (activeTableCell.getAttribute('background-color') || '') : '';
+      const cells = getSelectedCells();
+      const tokens = new Set((cells.length ? cells : activeTableCell ? [activeTableCell] : [])
+        .map(function(cell) { return cell.getAttribute('background-color') || ''; }));
+      const activeToken = tokens.size === 1 ? Array.from(tokens)[0] : '';
       document.querySelectorAll('[data-cell-background]').forEach(function(button) {
         button.setAttribute('aria-pressed', String(button.dataset.cellBackground === activeToken));
       });
     }
 
     function clearCellBackgroundHistory() {
-      cellBackgroundUndoStack.length = 0;
-      cellBackgroundRedoStack.length = 0;
+      if (historyRestoring) return;
+      tableUndoStack.length = 0;
+      tableRedoStack.length = 0;
+      tableHistoryArmed = false;
     }
 
-    function syncCellBackgroundChange(cell, type) {
-      if (activeTableCell === cell) updateCellBackgroundPalette();
+    function getSelectedCells() {
+      return Array.from(selectedTableCells).filter(function(cell) { return cell.isConnected; });
+    }
+
+    function syncCellBackgroundChange(cells, type) {
+      if (cells.indexOf(activeTableCell) >= 0) updateCellBackgroundPalette();
       emitChanged(type);
       win.requestAnimationFrame(positionTableCellTools);
     }
 
     function undoCellBackground() {
-      while (cellBackgroundUndoStack.length) {
-        const record = cellBackgroundUndoStack.pop();
-        if (!record.cell.isConnected) continue;
-        setCellBackgroundState(record.cell, record.before);
-        cellBackgroundRedoStack.push(record);
-        syncCellBackgroundChange(record.cell, 'background-undo');
-        return true;
-      }
-      return false;
+      return undoTableEdit();
     }
 
     function redoCellBackground() {
-      while (cellBackgroundRedoStack.length) {
-        const record = cellBackgroundRedoStack.pop();
-        if (!record.cell.isConnected) continue;
-        setCellBackgroundState(record.cell, record.after);
-        cellBackgroundUndoStack.push(record);
-        syncCellBackgroundChange(record.cell, 'background-redo');
-        return true;
-      }
-      return false;
+      return redoTableEdit();
     }
 
     function applyCellBackground(token) {
       if (!activeTableCell || !activeTableCell.isConnected || (token && !FEISHU_CELL_BACKGROUNDS[token])) return false;
-      const cell = activeTableCell;
-      const before = getCellBackgroundState(cell);
+      let cells = getSelectedCells();
+      if (!cells.length || cells.indexOf(activeTableCell) < 0) cells = [activeTableCell];
       const after = { token: token || '', style: token ? FEISHU_CELL_BACKGROUNDS[token] : '' };
-      if (before.token === after.token && (after.token || before.style === after.style)) return false;
-      setCellBackgroundState(cell, after);
-      cellBackgroundUndoStack.push({ cell: cell, before: before, after: after });
-      cellBackgroundRedoStack.length = 0;
-      syncCellBackgroundChange(cell, 'background');
+      const changedCells = cells.filter(function(cell) {
+        const before = getCellBackgroundState(cell);
+        return before.token !== after.token || (!after.token && before.style !== after.style);
+      });
+      if (!changedCells.length) return false;
+      captureTableHistory();
+      changedCells.forEach(function(cell) { setCellBackgroundState(cell, after); });
+      syncCellBackgroundChange(changedCells, 'background');
       return true;
     }
 
@@ -539,6 +628,59 @@
       menu.style.left = left + 'px';
     }
 
+    function clearSelectedCells() {
+      selectedTableCells.forEach(function(cell) {
+        cell.classList.remove('table-cell-multi-selected', 'table-cell-selection-anchor');
+      });
+      selectedTableCells.clear();
+      selectionAnchorCell = null;
+    }
+
+    function setSelectedCellList(cells, activeCell, anchorCell) {
+      clearSelectedCells();
+      cells.filter(function(cell) { return cell && cell.isConnected && editor.contains(cell); }).forEach(function(cell) {
+        selectedTableCells.add(cell);
+        cell.classList.add('table-cell-multi-selected');
+      });
+      selectionAnchorCell = anchorCell && selectedTableCells.has(anchorCell) ? anchorCell : (cells[0] || null);
+      if (selectionAnchorCell) selectionAnchorCell.classList.add('table-cell-selection-anchor');
+      setActiveCell(activeCell && selectedTableCells.has(activeCell) ? activeCell : selectionAnchorCell);
+      return getSelectedCells();
+    }
+
+    function selectSingleCell(cell) {
+      return setSelectedCellList(cell ? [cell] : [], cell, cell);
+    }
+
+    function selectCellRange(anchor, target) {
+      if (!anchor || !target || anchor.closest('table') !== target.closest('table')) return selectSingleCell(target);
+      const tableContext = buildTableGrid(target.closest('table'));
+      const start = tableContext.origins.get(anchor);
+      const end = tableContext.origins.get(target);
+      if (!start || !end) return selectSingleCell(target);
+      const top = Math.min(start.row, end.row);
+      const bottom = Math.max(start.row + start.rowSpan - 1, end.row + end.rowSpan - 1);
+      const left = Math.min(start.col, end.col);
+      const right = Math.max(start.col + start.colSpan - 1, end.col + end.colSpan - 1);
+      const cells = [];
+      tableContext.origins.forEach(function(origin, cell) {
+        const intersects = origin.row <= bottom && origin.row + origin.rowSpan - 1 >= top &&
+          origin.col <= right && origin.col + origin.colSpan - 1 >= left;
+        if (intersects) cells.push(cell);
+      });
+      return setSelectedCellList(cells, target, anchor);
+    }
+
+    function toggleSelectedCell(cell) {
+      if (!cell) return [];
+      const current = getSelectedCells();
+      if (current.length && current[0].closest('table') !== cell.closest('table')) return selectSingleCell(cell);
+      if (selectedTableCells.has(cell)) selectedTableCells.delete(cell);
+      else selectedTableCells.add(cell);
+      const cells = Array.from(selectedTableCells);
+      return setSelectedCellList(cells.length ? cells : [cell], cell, selectionAnchorCell || cell);
+    }
+
     function setActiveCell(cell) {
       if (activeTableCell && activeTableCell !== cell) activeTableCell.classList.remove('table-cell-selected');
       activeTableCell = cell && editor.contains(cell) ? cell : null;
@@ -552,14 +694,20 @@
     function showTableCellTools(cell) {
       if (!cell || isSourceMode()) return false;
       hideTextColorPalette();
-      setActiveCell(cell);
+      if (!selectedTableCells.has(cell)) selectSingleCell(cell);
+      else setActiveCell(cell);
+      const multiple = selectedTableCells.size > 1;
       cell.classList.add('table-cell-selected');
       menu.classList.add('active');
-      tools.mergeRight.disabled = !getMergeRightTarget(cell);
-      tools.mergeDown.disabled = !getMergeDownTarget(cell);
-      tools.split.disabled = cell.colSpan === 1 && cell.rowSpan === 1;
-      tools.deleteRow.disabled = !canDeleteSelectedTableRow();
-      tools.deleteColumn.disabled = !canDeleteSelectedTableColumn();
+      tools.mergeRight.disabled = multiple || !getMergeRightTarget(cell);
+      tools.mergeDown.disabled = multiple || !getMergeDownTarget(cell);
+      tools.split.disabled = multiple || (cell.colSpan === 1 && cell.rowSpan === 1);
+      tools.insertRowAbove.disabled = multiple;
+      tools.insertRowBelow.disabled = multiple;
+      tools.insertColumnLeft.disabled = multiple;
+      tools.insertColumnRight.disabled = multiple;
+      tools.deleteRow.disabled = multiple || !canDeleteSelectedTableRow();
+      tools.deleteColumn.disabled = multiple || !canDeleteSelectedTableColumn();
       updateCellBackgroundPalette();
       win.requestAnimationFrame(positionTableCellTools);
       return true;
@@ -568,6 +716,7 @@
     function hideTableCellTools() {
       if (activeTableCell) activeTableCell.classList.remove('table-cell-selected');
       activeTableCell = null;
+      clearSelectedCells();
       menu.classList.remove('active');
       menu.style.visibility = '';
     }
@@ -577,17 +726,110 @@
       removers.push(function() { target.removeEventListener(type, listener, optionsValue); });
     }
 
+    function getEventTableCell(event) {
+      let node = event.target;
+      let cell = node && node.closest ? node.closest('th,td') : null;
+      if (!cell) {
+        const selection = win.getSelection();
+        node = selection && selection.anchorNode;
+        if (node && node.nodeType !== 1) node = node.parentElement;
+        cell = node && node.closest ? node.closest('th,td') : null;
+      }
+      return cell && editor.contains(cell) ? cell : null;
+    }
+
+    function getTableNavigationCells(table) {
+      const tableContext = buildTableGrid(table);
+      return Array.from(tableContext.origins.entries()).sort(function(left, right) {
+        return left[1].row - right[1].row || left[1].col - right[1].col;
+      }).map(function(entry) { return entry[0]; });
+    }
+
+    function focusTableCell(cell, atEnd) {
+      if (!cell) return false;
+      menu.classList.remove('active');
+      menu.style.visibility = '';
+      selectSingleCell(cell);
+      try { editor.focus({ preventScroll: true }); } catch (error) { editor.focus(); }
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      range.collapse(!atEnd);
+      const selection = win.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      return true;
+    }
+
+    function handleTableTab(event) {
+      if (event.key !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || isSourceMode()) return false;
+      const cell = getEventTableCell(event);
+      if (!cell) return false;
+      const table = cell.closest('table');
+      let cells = getTableNavigationCells(table);
+      const currentIndex = cells.indexOf(cell);
+      if (currentIndex < 0) return false;
+      let target = cells[currentIndex + (event.shiftKey ? -1 : 1)];
+      if (!target && !event.shiftKey) {
+        const existingCells = new Set(cells);
+        setActiveCell(cell);
+        if (insertTableRow('below')) {
+          cells = getTableNavigationCells(table);
+          target = cells.find(function(candidate) { return !existingCells.has(candidate); });
+        }
+      }
+      if (!target) return false;
+      event.preventDefault();
+      return focusTableCell(target, event.shiftKey);
+    }
+
     function bind() {
       if (bound) return api;
       bound = true;
+      listen(editor, 'mousedown', function(event) {
+        if (event.button !== 0) return;
+        const cell = getEventTableCell(event);
+        dragStartCell = cell;
+        if (!cell) return;
+        if (event.shiftKey) {
+          selectCellRange(selectionAnchorCell || activeTableCell || cell, cell);
+          event.preventDefault();
+        } else if (event.ctrlKey || event.metaKey) {
+          toggleSelectedCell(cell);
+          event.preventDefault();
+        }
+      });
+      listen(editor, 'mouseover', function(event) {
+        if (!dragStartCell || !(event.buttons & 1)) return;
+        const cell = getEventTableCell(event);
+        if (!cell || cell === dragStartCell || cell.closest('table') !== dragStartCell.closest('table')) return;
+        suppressSelectionClick = true;
+        selectCellRange(dragStartCell, cell);
+        const selection = win.getSelection();
+        if (selection) selection.removeAllRanges();
+        event.preventDefault();
+      });
+      listen(document, 'mouseup', function() {
+        dragStartCell = null;
+      });
       listen(editor, 'click', function(event) {
-        const cell = event.target.closest && event.target.closest('th,td');
-        hideTableCellTools();
-        if (cell && editor.contains(cell)) setActiveCell(cell);
+        const cell = getEventTableCell(event);
+        if (suppressSelectionClick) {
+          suppressSelectionClick = false;
+          event.preventDefault();
+          return;
+        }
+        if (!cell) {
+          hideTableCellTools();
+          return;
+        }
+        menu.classList.remove('active');
+        menu.style.visibility = '';
+        if (!event.shiftKey && !event.ctrlKey && !event.metaKey) selectSingleCell(cell);
       });
       listen(editor, 'contextmenu', function(event) {
-        const cell = event.target.closest && event.target.closest('th,td');
-        if (!cell || !editor.contains(cell)) {
+        const cell = getEventTableCell(event);
+        if (!cell) {
           hideTableCellTools();
           return;
         }
@@ -595,9 +837,6 @@
         showTableCellTools(cell);
       });
       listen(menu, 'mousedown', function(event) { event.preventDefault(); });
-      listen(menu, 'click', function(event) {
-        if (event.target.closest('button') && !event.target.closest('[data-cell-background]')) clearCellBackgroundHistory();
-      }, true);
       document.querySelectorAll('[data-cell-background]').forEach(function(button) {
         listen(button, 'click', function() { applyCellBackground(button.dataset.cellBackground); });
       });
@@ -621,13 +860,15 @@
       listen(editor, 'scroll', positionTableCellTools, true);
       listen(win, 'resize', positionTableCellTools);
       listen(document, 'keydown', function(event) {
+        if (handleTableTab(event)) return;
         const key = event.key.toLowerCase();
-        if (event.ctrlKey && !event.altKey && key === 'z' && !event.shiftKey && cellBackgroundUndoStack.length) {
-          if (undoCellBackground()) event.preventDefault();
+        if (event.ctrlKey && !event.altKey && key === 'z' && !event.shiftKey && tableHistoryArmed && tableUndoStack.length) {
+          if (undoTableEdit()) event.preventDefault();
           return;
         }
-        if (event.ctrlKey && !event.altKey && ((key === 'y' && !event.shiftKey) || (key === 'z' && event.shiftKey)) && cellBackgroundRedoStack.length) {
-          if (redoCellBackground()) event.preventDefault();
+        if (event.ctrlKey && !event.altKey && ((key === 'y' && !event.shiftKey) || (key === 'z' && event.shiftKey)) &&
+            tableHistoryArmed && tableRedoStack.length) {
+          if (redoTableEdit()) event.preventDefault();
           return;
         }
         if (event.key === 'Escape' && menu.classList.contains('active')) hideTableCellTools();
@@ -651,6 +892,9 @@
       buildTableGrid: buildTableGrid,
       getTableCellContext: getTableCellContext,
       getActiveCell: getActiveCell,
+      getSelectedCells: getSelectedCells,
+      selectSingleCell: selectSingleCell,
+      selectCellRange: selectCellRange,
       setActiveCell: setActiveCell,
       notifyChanged: notifyChanged,
       mergeTableCellRight: mergeTableCellRight,
@@ -662,9 +906,12 @@
       deleteSelectedTableColumn: deleteSelectedTableColumn,
       deleteSelectedTable: deleteSelectedTable,
       createFeishuTableClone: createFeishuTableClone,
+      createSelectedTableClone: createSelectedTableClone,
       getCellBackgroundState: getCellBackgroundState,
       setCellBackgroundState: setCellBackgroundState,
       applyCellBackground: applyCellBackground,
+      undoTableEdit: undoTableEdit,
+      redoTableEdit: redoTableEdit,
       undoCellBackground: undoCellBackground,
       redoCellBackground: redoCellBackground,
       clearCellBackgroundHistory: clearCellBackgroundHistory,
