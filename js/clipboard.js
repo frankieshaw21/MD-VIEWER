@@ -15,8 +15,11 @@
     const sourceEditor = context.elements.sourceEditor;
     const parser = context.getPort('parser');
     const tables = context.getPort('tables');
-    const isSourceMode = function() { return context.getPort('editor').invoke('isSourceMode'); };
-    const schedulePreviewSync = function() { return context.getPort('editor').invoke('schedulePreviewSync'); };
+    const MERMAID_MIME = 'application/x-md-viewer-mermaid';
+    const getEditorPort = function() { return context.getPort('editor'); };
+    const isSourceMode = function() { return getEditorPort().invoke('isSourceMode'); };
+    const isSplitMode = function() { return getEditorPort().invoke('isSplitMode'); };
+    const schedulePreviewSync = function() { return getEditorPort().invoke('schedulePreviewSync'); };
     const removers = [];
     let bound = false;
 
@@ -96,6 +99,127 @@
     function safeDecodeURIComponent(value) {
       try { return decodeURIComponent(value || ''); }
       catch (error) { return value || ''; }
+    }
+
+    function rangeSelectsNode(range, node) {
+      const parent = node && node.parentNode;
+      if (!range || !parent) return false;
+      const index = Array.prototype.indexOf.call(parent.childNodes, node);
+      return index >= 0 && range.startContainer === parent && range.startOffset === index &&
+        range.endContainer === parent && range.endOffset === index + 1;
+    }
+
+    function getSelectedMermaidContainer() {
+      const selection = win.getSelection && win.getSelection();
+      if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+      const range = selection.getRangeAt(0);
+      return Array.from(editor.querySelectorAll('.mermaid-container')).find(function(container) {
+        return rangeSelectsNode(range, container);
+      }) || null;
+    }
+
+    function mermaidMarkdown(source) {
+      return '```mermaid\n' + String(source || '') + '\n```';
+    }
+
+    function mermaidClipboardHtml(source) {
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      code.className = 'language-mermaid';
+      code.textContent = String(source || '');
+      pre.appendChild(code);
+      return createFeishuHtmlShell(pre.outerHTML, false);
+    }
+
+    function setMermaidClipboard(event, container, action) {
+      if (!event.clipboardData || !container) return false;
+      const source = safeDecodeURIComponent(container.getAttribute('data-mermaid-source'));
+      try { event.clipboardData.setData(MERMAID_MIME, source); }
+      catch (error) { /* Custom clipboard MIME is an optional same-app optimization. */ }
+      event.clipboardData.setData('text/plain', mermaidMarkdown(source));
+      event.clipboardData.setData('text/html', mermaidClipboardHtml(source));
+      event.preventDefault();
+      emit(action === 'cut' ? 'clipboard:cut' : 'clipboard:copied', 'mermaid', 'preview');
+      return true;
+    }
+
+    function handleMermaidCopy(event) {
+      const container = getSelectedMermaidContainer();
+      return container ? setMermaidClipboard(event, container, 'copy') : false;
+    }
+
+    function placeCaretAfterRemovedNode(parent, offset) {
+      if (!parent || !parent.isConnected) return;
+      if (!editor.hasChildNodes()) {
+        const paragraph = document.createElement('p');
+        paragraph.innerHTML = '<br>';
+        editor.appendChild(paragraph);
+        parent = paragraph;
+        offset = 0;
+      }
+      const range = document.createRange();
+      if (parent === editor) range.setStart(parent, Math.min(offset, parent.childNodes.length));
+      else range.selectNodeContents(parent);
+      range.collapse(true);
+      const selection = win.getSelection && win.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+
+    function handleMermaidCut(event) {
+      const container = getSelectedMermaidContainer();
+      if (!container || isSplitMode() || !setMermaidClipboard(event, container, 'cut')) return false;
+      const parent = container.parentNode;
+      const offset = parent ? Array.prototype.indexOf.call(parent.childNodes, container) : 0;
+      container.remove();
+      placeCaretAfterRemovedNode(parent, Math.max(0, offset));
+      schedulePreviewSync();
+      return true;
+    }
+
+    function extractMermaidFence(text) {
+      const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+      while (lines.length && !lines[0].trim()) lines.shift();
+      while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+      if (lines.length < 2) return null;
+      const opening = lines[0].match(/^\s*(`{3,}|~{3,})\s*mermaid(?:\s+.*)?$/i);
+      if (!opening) return null;
+      const marker = opening[1];
+      const closing = lines[lines.length - 1].trim();
+      if (closing.charAt(0) !== marker.charAt(0) || closing.length < marker.length ||
+          closing.split('').some(function(character) { return character !== marker.charAt(0); })) return null;
+      return lines.slice(1, -1).join('\n');
+    }
+
+    function readMermaidClipboard(event) {
+      const data = event.clipboardData;
+      if (!data) return null;
+      const types = Array.from(data.types || []);
+      if (types.indexOf(MERMAID_MIME) >= 0) return data.getData(MERMAID_MIME);
+      return extractMermaidFence(data.getData('text/plain'));
+    }
+
+    function handleMermaidPaste(event) {
+      const source = readMermaidClipboard(event);
+      if (source === null) return false;
+      if (event.currentTarget === sourceEditor) {
+        event.preventDefault();
+        insertSourceTextAtSelection(mermaidMarkdown(source));
+        emit('clipboard:pasted', 'mermaid', 'source');
+        return true;
+      }
+      if (event.currentTarget === editor && !isSplitMode()) {
+        event.preventDefault();
+        const insertion = getEditorPort().insertMermaidWithCode(source);
+        if (insertion && typeof insertion.catch === 'function') insertion.catch(function(error) {
+          console.error('Unable to render pasted Mermaid diagram.', error);
+        });
+        emit('clipboard:pasted', 'mermaid', 'preview');
+        return true;
+      }
+      return false;
     }
 
     function createExportCodeBlock(label, source) {
@@ -263,6 +387,7 @@
     }
 
     function handleFeishuCompatibleCopy(event) {
+      if (handleMermaidCopy(event)) return true;
       const sourceTable = getSelectedSourceTable();
       if (sourceTable) return setFeishuTableClipboard(event, sourceTable, 'source');
       const sourceDocument = getSelectedSourceDocument();
@@ -371,6 +496,7 @@
     }
 
     function handleFeishuCompatiblePaste(event) {
+      if (handleMermaidPaste(event)) return true;
       const html = event.clipboardData && event.clipboardData.getData('text/html');
       const root = createFeishuPasteRoot(html);
       if (!root) return false;
@@ -402,6 +528,7 @@
       if (bound) return api;
       bound = true;
       listen(document, 'copy', handleFeishuCompatibleCopy);
+      listen(document, 'cut', handleMermaidCut);
       listen(editor, 'paste', handleFeishuCompatiblePaste);
       listen(sourceEditor, 'paste', handleFeishuCompatiblePaste);
       return api;
@@ -424,6 +551,12 @@
       getSelectedSourceTable: getSelectedSourceTable,
       getSelectedSourceDocument: getSelectedSourceDocument,
       getPreviewSelectionRoot: getPreviewSelectionRoot,
+      getSelectedMermaidContainer: getSelectedMermaidContainer,
+      setMermaidClipboard: setMermaidClipboard,
+      handleMermaidCopy: handleMermaidCopy,
+      handleMermaidCut: handleMermaidCut,
+      handleMermaidPaste: handleMermaidPaste,
+      extractMermaidFence: extractMermaidFence,
       createFeishuPasteRoot: createFeishuPasteRoot,
       insertSourceTextAtSelection: insertSourceTextAtSelection,
       handleFeishuCompatibleCopy: handleFeishuCompatibleCopy,

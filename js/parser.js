@@ -63,6 +63,59 @@ function parseInline(text) {
   return s;
 }
 
+function parseAtxHeading(line) {
+  const match = String(line || '').replace(/\r$/, '').match(/^ {0,3}(#{1,6})(?:[ \t]+(.*)|[ \t]*)$/);
+  if (!match) return null;
+  const markdownText = String(match[2] || '').replace(/[ \t]+#+[ \t]*$/, '').trim();
+  return { level: match[1].length, markdownText: markdownText };
+}
+
+function inlineText(markdownText) {
+  const container = document.createElement('div');
+  container.innerHTML = parseInline(String(markdownText || ''));
+  return container.textContent.trim();
+}
+
+function extractHeadings(markdown) {
+  const headings = [];
+  const detailsStack = [];
+  let hiddenDetailsDepth = 0;
+  let offset = 0;
+  let fence = null;
+  String(markdown || '').split('\n').forEach(function(line) {
+    const clean = line.replace(/\r$/, '');
+    const marker = clean.match(/^\s*(`{3,}|~{3,})/);
+    if (fence) {
+      if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length &&
+          /^\s*(`+|~+)\s*$/.test(clean)) fence = null;
+    } else if (marker) {
+      fence = { character: marker[1][0], length: marker[1].length };
+    } else {
+      const closingDetails = clean.match(/^\s*<\/details\s*>/i);
+      const openingDetails = clean.match(/^\s*<details\b([^>]*)>/i);
+      if (closingDetails) {
+        if (detailsStack.pop()) hiddenDetailsDepth = Math.max(0, hiddenDetailsDepth - 1);
+      } else if (openingDetails) {
+        const explicitlyOpen = /(?:^|\s)open(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?(?=\s|$)/i.test(openingDetails[1]);
+        const hidden = hiddenDetailsDepth > 0 || !explicitlyOpen;
+        detailsStack.push(hidden);
+        if (hidden) hiddenDetailsDepth += 1;
+      } else if (hiddenDetailsDepth === 0) {
+        const heading = parseAtxHeading(clean);
+        if (heading) headings.push({
+          level: heading.level,
+          text: inlineText(heading.markdownText),
+          markdownText: heading.markdownText,
+          start: offset,
+          end: offset + clean.length
+        });
+      }
+    }
+    offset += line.length + 1;
+  });
+  return headings;
+}
+
 function mdToHtml(md) {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   let html = '';
@@ -148,18 +201,18 @@ function mdToHtml(md) {
       continue;
     }
 
-    // Other raw HTML blocks - pass through
-    if (line.match(/^\s*<(iframe|div|img|details|summary|hr|br)/i)) {
+    // Other raw HTML blocks - pass through. Closing tags must also pass
+    // through so containers such as <details> do not remain open.
+    if (line.match(/^\s*<\/?(iframe|div|img|details|summary|hr|br)\b/i)) {
       html += line + '\n';
       i++;
       continue;
     }
 
-    // Heading
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    // Heading - share the exact ATX grammar with outline extraction.
+    const h = parseAtxHeading(line);
     if (h) {
-      const level = h[1].length;
-      html += '<h' + level + '>' + parseInline(h[2].trim()) + '</h' + level + '>';
+      html += '<h' + h.level + '>' + parseInline(h.markdownText) + '</h' + h.level + '>';
       i++;
       continue;
     }
@@ -228,13 +281,13 @@ function mdToHtml(md) {
     // Paragraph (collect consecutive non-blank, non-special lines)
     const paraLines = [];
     while (i < lines.length && lines[i].trim() !== '' &&
-           !lines[i].match(/^(#{1,6})\s/) &&
+           !parseAtxHeading(lines[i]) &&
            !lines[i].match(/^\s*([-*_])\s*(\1\s*){2,}$/) &&
            !lines[i].match(/^\s*>/) &&
            !lines[i].match(/^(\s*)(`{3,}|~{3,})/) &&
            !lines[i].match(/^\s*([-*+]|\d+\.)\s+/) &&
            !(lines[i].indexOf('|') >= 0 && i + 1 < lines.length && lines[i+1].match(/^\s*\|?[\s:]*-+[\s:|-]*$/)) &&
-           !lines[i].match(/^\s*<(iframe|div|table|img|details|summary|hr)/i)) {
+           !lines[i].match(/^\s*<\/?(iframe|div|table|img|details|summary|hr|br)\b/i)) {
       paraLines.push(lines[i]);
       i++;
     }
@@ -475,6 +528,8 @@ function normalizeMarkdownBeforeRender(md) {
     return Object.freeze({
       escHtml: escHtml,
       parseInline: parseInline,
+      parseAtxHeading: parseAtxHeading,
+      extractHeadings: extractHeadings,
       mdToHtml: mdToHtml,
       getIndent: getIndent,
       isOrderedMarker: isOrderedMarker,

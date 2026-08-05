@@ -251,6 +251,7 @@ internal sealed class MainForm : Form
                 "if(!f)return [];if(typeof f.getUnsavedFileNames==='function')return f.getUnsavedFileNames();" +
                 "return f.hasUnsavedChanges()?['当前文档']:[];})()");
             var unsavedNames = JsonSerializer.Deserialize<string[]>(namesResult) ?? Array.Empty<string>();
+            var exitMode = "clean";
             if (unsavedNames.Length > 0)
             {
                 var visibleNames = unsavedNames.Take(8).Select(name => "• " + name).ToList();
@@ -261,7 +262,19 @@ internal sealed class MainForm : Form
                     "\n\n是否放弃这些更改并退出？\n选择“否”可返回继续保存。",
                     "MD Viewer", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
                 if (answer != DialogResult.Yes) return;
+                exitMode = "discard";
             }
+
+            var prepareResult = await _webView.CoreWebView2.ExecuteScriptAsync(
+                "(function(){var f=window.MDViewer&&MDViewer.app&&MDViewer.app.getPort('files');" +
+                $"return Boolean(f&&typeof f.prepareExit==='function'&&f.prepareExit('{exitMode}'));}})()");
+            if (prepareResult != "true")
+            {
+                MessageBox.Show(this, "无法安全准备退出，会话状态未写入。已取消退出。",
+                    "MD Viewer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             _allowClose = true;
             Close();
         }

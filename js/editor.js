@@ -27,6 +27,8 @@
     let mermaidLayoutObserver = null;
     let savedColorRange = null;
     let lastSelectionRange = null;
+    let mermaidUndoStack = [];
+    let mermaidRedoStack = [];
     const textColors = Object.freeze({
       red: '#d83931', orange: '#de7802', yellow: '#dc9b04', green: '#2d9f46',
       blue: '#3370ff', purple: '#7b67ee', gray: '#646a73'
@@ -185,6 +187,107 @@
       });
     }
 
+    function selectMermaidContainer(container) {
+      if (!container || !editorEl || !editorEl.contains(container)) return false;
+      const selection = global.getSelection && global.getSelection();
+      if (!selection) return false;
+      const range = document.createRange();
+      range.selectNode(container);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      emit('mermaid:selected', { container: container });
+      return true;
+    }
+
+    function rangeSelectsNode(range, node) {
+      const parent = node && node.parentNode;
+      if (!range || !parent) return false;
+      const index = Array.prototype.indexOf.call(parent.childNodes, node);
+      return index >= 0 && range.startContainer === parent && range.startOffset === index &&
+        range.endContainer === parent && range.endOffset === index + 1;
+    }
+
+    function getSelectedMermaidContainer() {
+      if (isSourceMode()) return null;
+      const selection = global.getSelection && global.getSelection();
+      if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+      const range = selection.getRangeAt(0);
+      return Array.from(editorEl.querySelectorAll('.mermaid-container')).find(function(container) {
+        return rangeSelectsNode(range, container);
+      }) || null;
+    }
+
+    function previewMarkdown() {
+      return parser.domToMd(editorEl).trim();
+    }
+
+    function deleteSelectedMermaid(event) {
+      if (!event || (event.key !== 'Delete' && event.key !== 'Backspace') ||
+          event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || isSplitMode()) return false;
+      const container = getSelectedMermaidContainer();
+      if (!container) return false;
+      event.preventDefault();
+      const activeFile = currentFile();
+      const beforeContent = previewMarkdown();
+      const parent = container.parentNode;
+      const offset = parent ? Array.prototype.indexOf.call(parent.childNodes, container) : 0;
+      container.remove();
+      try { editorEl.focus({ preventScroll: true }); }
+      catch (error) { editorEl.focus(); }
+
+      if (!editorEl.hasChildNodes()) {
+        const paragraph = document.createElement('p');
+        paragraph.innerHTML = '<br>';
+        editorEl.appendChild(paragraph);
+      }
+      const selection = global.getSelection && global.getSelection();
+      if (selection) {
+        const range = document.createRange();
+        if (parent && parent.isConnected) range.setStart(parent, Math.min(Math.max(0, offset), parent.childNodes.length));
+        else { range.selectNodeContents(editorEl); range.collapse(false); }
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+
+      const afterContent = previewMarkdown();
+      if (activeFile && beforeContent !== afterContent) {
+        mermaidUndoStack.push({ file: activeFile, before: beforeContent, after: afterContent });
+        if (mermaidUndoStack.length > 50) mermaidUndoStack.shift();
+        mermaidRedoStack = [];
+      }
+      schedulePreviewSync();
+      emit('mermaid:deleted', { source: 'keyboard', key: event.key, undoable: Boolean(activeFile) });
+      return true;
+    }
+
+    function handleMermaidUndoRedo(event) {
+      if (!event || (!event.ctrlKey && !event.metaKey) || event.altKey) return false;
+      const key = String(event.key || '').toLowerCase();
+      const redo = key === 'y' || (key === 'z' && event.shiftKey);
+      if (key !== 'z' && key !== 'y') return false;
+      const stack = redo ? mermaidRedoStack : mermaidUndoStack;
+      const entry = stack[stack.length - 1];
+      const activeFile = currentFile();
+      if (!entry || !activeFile || entry.file !== activeFile || isSourceMode()) return false;
+      const current = previewMarkdown();
+      const expected = redo ? entry.before : entry.after;
+      if (current !== expected) return false;
+
+      event.preventDefault();
+      stack.pop();
+      (redo ? mermaidUndoStack : mermaidRedoStack).push(entry);
+      const target = redo ? entry.after : entry.before;
+      Promise.resolve(files().replaceActiveContent(target, {
+        source: redo ? 'mermaid-redo' : 'mermaid-undo'
+      })).then(function() {
+        try { editorEl.focus({ preventScroll: true }); }
+        catch (error) { editorEl.focus(); }
+        emit(redo ? 'mermaid:redone' : 'mermaid:undone', { file: activeFile });
+      }).catch(function(error) { console.error('Unable to restore Mermaid edit.', error); });
+      return true;
+    }
+
     function enableMermaidDrag(target) {
       if (!target || target.dataset.mermaidDragBound === '1') return;
       target.dataset.mermaidDragBound = '1';
@@ -238,10 +341,15 @@
       target.addEventListener('pointercancel', finishDrag);
       target.addEventListener('lostpointercapture', finishDrag);
       target.addEventListener('click', function(event) {
-        if (!suppressClick) return;
-        suppressClick = false;
-        event.preventDefault();
-        event.stopImmediatePropagation();
+        if (suppressClick) {
+          suppressClick = false;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
+        if (event.target && event.target.closest && event.target.closest('a[href]')) return;
+        const container = target.closest('.mermaid-container');
+        if (selectMermaidContainer(container)) event.preventDefault();
       }, true);
       target.addEventListener('dragstart', function(event) { event.preventDefault(); });
     }
@@ -630,20 +738,31 @@
       if (code) insertMermaidWithCode(code);
     }
     async function insertMermaidWithCode(code) {
+      const source = String(code || '');
       const container = document.createElement('div');
       container.className = 'mermaid-container'; container.contentEditable = 'false';
-      container.setAttribute('data-mermaid-source', encodeURIComponent(code));
-      const target = document.createElement('div'); target.className = 'mermaid'; container.appendChild(target);
+      container.setAttribute('data-mermaid-source', encodeURIComponent(source));
+      const target = document.createElement('div');
+      target.className = 'mermaid';
+      target.textContent = source;
+      container.appendChild(target);
+
+      // Insert synchronously so paste keeps the current caret even while Mermaid loads.
+      insertEditorNode(container, false);
       try {
         await loadMermaidLib();
-        const result = await global.mermaid.render('mermaid-insert-' + Date.now() + '-' + Math.random().toString(36).slice(2), code);
+        if (!container.isConnected) return container;
+        const result = await global.mermaid.render('mermaid-insert-' + Date.now() + '-' + Math.random().toString(36).slice(2), source);
+        if (!container.isConnected) return container;
         target.innerHTML = result.svg;
         normalizeMermaidSvg(target);
       } catch (error) {
-        target.innerHTML = '<pre style="text-align:left;font-size:12px">' + parser.escHtml(code) +
-          '</pre><div style="font-size:11px;color:#999">（mermaid.min.js 加载失败）</div>';
+        if (container.isConnected) {
+          target.innerHTML = '<pre style="text-align:left;font-size:12px">' + parser.escHtml(source) +
+            '</pre><div style="font-size:11px;color:#999">（mermaid.min.js 加载失败）</div>';
+        }
       }
-      insertEditorNode(container, false);
+      return container;
     }
     function insertLink() {
       const url = prompt('URL:', 'https://'); if (!url) return;
@@ -762,30 +881,16 @@
       return true;
     }
     function getSourceHeadings(markdown) {
-      const headings = [];
-      let offset = 0;
-      let fence = null;
-      String(markdown || '').split('\n').forEach(function(line) {
-        const clean = line.replace(/\r$/, '');
-        const marker = clean.match(/^\s*(`{3,}|~{3,})/);
-        if (fence) {
-          if (marker && marker[1][0] === fence.char && marker[1].length >= fence.length && /^\s*(`+|~+)\s*$/.test(clean)) fence = null;
-        } else if (marker) {
-          fence = { char: marker[1][0], length: marker[1].length };
-        } else {
-          const match = clean.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
-          if (match) headings.push({ level: match[1].length, text: match[2], start: offset, end: offset + clean.length });
-        }
-        offset += line.length + 1;
-      });
-      return headings;
+      return parser.extractHeadings(markdown);
     }
 
     function getOutline() {
       if (isSourceMode()) return getSourceHeadings(sourceEditor.value);
-      return Array.from(editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6')).map(function(node) {
-        return { level: Number(node.tagName.slice(1)), text: node.textContent.trim(), node: node };
-      });
+      return Array.from(editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+        .filter(function(node) { return !node.closest('details:not([open])'); })
+        .map(function(node) {
+          return { level: Number(node.tagName.slice(1)), text: node.textContent.trim(), node: node };
+        });
     }
 
     function updateOutline() {
@@ -830,7 +935,8 @@
         sourceEditor.focus();
         sourceEditor.setSelectionRange(heading.start, heading.end);
         sourceEditor.scrollTo({ top: Math.max(0, textareaTop(heading.start) - sourceEditor.clientHeight / 3), behavior: 'smooth' });
-      } else heading.node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (heading.node) heading.node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else return false;
       if (outlineList) Array.from(outlineList.children).forEach(function(item, itemIndex) {
         item.classList.toggle('active-heading', itemIndex === index);
       });
@@ -860,6 +966,12 @@
       });
       editorEl.addEventListener('change', function(event) {
         if (!isSplitMode() && event.target.matches('input[type="checkbox"]')) schedulePreviewSync();
+      });
+      editorEl.addEventListener('toggle', function(event) {
+        if (event.target && event.target.matches('details')) updateOutline();
+      }, true);
+      document.addEventListener('keydown', function(event) {
+        if (!handleMermaidUndoRedo(event)) deleteSelectedMermaid(event);
       });
       sourceEditor.addEventListener('compositionstart', function() { composing = true; });
       sourceEditor.addEventListener('compositionend', function() { composing = false; sourceChanged(); });
@@ -913,7 +1025,7 @@
         }, 180);
       }
       updateCounts();
-      scheduleOutline();
+      updateOutline();
       history.scheduleHistorySnapshot();
       emit('document:changed', { content: content, mode: isSplitMode() ? 'split' : 'source', composing: composing });
     }
@@ -953,7 +1065,8 @@
       fmt: fmt, insertHeading: insertHeading, insertCodeBlock: insertCodeBlock,
       insertLink: insertLink, insertImage: insertImage, insertQuote: insertQuote,
       insertChecklist: insertChecklist, insertTable: insertTable, insertHR: insertHR,
-      insertMermaid: insertMermaid, toggleSource: toggleSource, toggleSplit: toggleSplit,
+      insertMermaid: insertMermaid, insertMermaidWithCode: insertMermaidWithCode,
+      toggleSource: toggleSource, toggleSplit: toggleSplit,
       loadMarkdown: loadMarkdown, render: loadMarkdown, replaceDocument: replaceDocument, setContent: setContent,
       showEmpty: showEmpty, getContent: getContent, schedulePreviewSync: schedulePreviewSync,
       flushPreviewChanges: flushPreviewChanges, enhanceRenderedContent: enhanceRenderedContent,
@@ -973,7 +1086,7 @@
       getContent: getContent, setContent: setContent, replaceContent: replaceDocument, replaceDocument: replaceDocument,
       load: loadMarkdown, render: loadMarkdown, flush: flushPreviewChanges, schedule: schedulePreviewSync,
       showEmpty: showEmpty, schedulePreviewSync: schedulePreviewSync, flushPreviewChanges: flushPreviewChanges,
-      toggleSource: toggleSource, toggleSplit: toggleSplit,
+      toggleSource: toggleSource, toggleSplit: toggleSplit, insertMermaidWithCode: insertMermaidWithCode,
       isSourceMode: isSourceMode, isSplitMode: isSplitMode, getViewMode: getViewMode,
       canPersistSession: canPersistSession,
       getOutline: getOutline, updateOutline: updateOutline, scheduleOutline: scheduleOutline,

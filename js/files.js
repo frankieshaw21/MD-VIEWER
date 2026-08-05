@@ -23,6 +23,7 @@
     let serverWatchBusy = false;
     let serverMtime = null;
     let pendingSave = null;
+    let exitPrepared = false;
 
     function emit(name, payload) { context.emit(name, payload); }
     function setState(key, value) {
@@ -642,13 +643,18 @@
       if (active) emit('file:metadata-changed', { file: active, index: activeFileIndex });
     }
 
-    function saveSession(force) {
-      if (!context.state.get('sessionDirty') || (!force && Date.now() < sessionRetryAt)) return;
-      if (!force && editor && typeof editor.canPersistSession === 'function' && !editor.canPersistSession()) return;
+    function saveSession(force, optionsValue) {
+      const opts = optionsValue || {};
+      if (exitPrepared && !opts.preparingExit) return true;
+      if (!force && !context.state.get('sessionDirty')) return true;
+      if (!force && Date.now() < sessionRetryAt) return false;
+      if (!force && editor && typeof editor.canPersistSession === 'function' && !editor.canPersistSession()) return false;
       const active = getActiveFile();
-      if (active && editor) active.content = editor.getContent({ flush: true });
+      if (opts.flushActive !== false && active && editor) active.content = editor.getContent({ flush: true });
       try {
         localStorage.setItem('md-viewer-session', JSON.stringify({
+          version: 2,
+          status: opts.status || 'running',
           activeIndex: activeFileIndex,
           files: openFiles.map(function(file) {
             return { name: file.name, content: file.content,
@@ -661,21 +667,52 @@
         setState('sessionDirty', false);
         sessionRetryAt = 0;
         sessionWarningShown = false;
+        return true;
       } catch (error) {
         sessionRetryAt = Date.now() + 60000;
         if (!sessionWarningShown) {
           sessionWarningShown = true;
           console.warn('Session cache is full or unavailable; retrying in 60 seconds.', error);
         }
+        return false;
       }
+    }
+
+    function prepareExit(mode) {
+      const normalized = mode === 'discard' || mode === 'keep-draft' ? mode : 'clean';
+      const active = getActiveFile();
+      if (active && editor) active.content = editor.getContent({ flush: true });
+      const dirtyFiles = openFiles.filter(function(file) { return file.content !== file.savedContent; });
+      if (normalized === 'clean' && dirtyFiles.length) return false;
+      if (normalized === 'discard') {
+        dirtyFiles.forEach(function(file) { file.content = file.savedContent; });
+        setState('modified', false);
+        dirtyFiles.forEach(function(file) { emit('file:modified', { file: file, modified: false }); });
+        publishList();
+      }
+      markSessionDirty();
+      const saved = saveSession(true, {
+        preparingExit: true,
+        flushActive: false,
+        status: normalized === 'discard' ? 'discarded' : normalized === 'keep-draft' ? 'graceful-draft' : 'clean'
+      });
+      if (!saved) return false;
+      exitPrepared = true;
+      emit('session:exit-prepared', { mode: normalized, discarded: dirtyFiles.length });
+      return true;
     }
     async function restoreSession() {
       try {
         const raw = localStorage.getItem('md-viewer-session'); if (!raw) return;
         const data = JSON.parse(raw);
+        const legacySession = Number(data.version || 0) < 2;
         openFiles = (data.files || []).map(function(file) {
-          return { name: file.name, content: String(file.content || ''),
-            savedContent: file.savedContent === null || file.savedContent === undefined ? String(file.content || '') : String(file.savedContent),
+          const cachedContent = String(file.content || '');
+          const cachedSavedContent = file.savedContent === null || file.savedContent === undefined
+            ? cachedContent : String(file.savedContent);
+          const legacyDraftContent = legacySession && cachedContent !== cachedSavedContent ? cachedContent : null;
+          return { name: file.name, content: legacyDraftContent === null ? cachedContent : cachedSavedContent,
+            savedContent: cachedSavedContent, legacyDraftContent: legacyDraftContent,
             handle: null, serverPath: file.serverPath || null, desktopPath: file.desktopPath || null,
             historyKey: file.historyKey || null,
             lastModified: file.lastModified || null, fileSize: file.fileSize === null ? undefined : file.fileSize,
@@ -687,6 +724,13 @@
         const nextModified = file.content !== file.savedContent;
         setState('activeFileIndex', activeFileIndex); setState('modified', nextModified);
         editor.replaceDocument(file.content, { source: 'session' });
+        for (const recoveredFile of openFiles) {
+          if (recoveredFile.legacyDraftContent === null) continue;
+          history.ensureHistoryKey(recoveredFile);
+          await history.createHistorySnapshot(recoveredFile, '旧版会话磁盘基线', recoveredFile.savedContent);
+          await history.createHistorySnapshot(recoveredFile, '旧版会话草稿（未自动恢复）', recoveredFile.legacyDraftContent);
+          delete recoveredFile.legacyDraftContent;
+        }
         history.ensureHistoryKey(file); history.createHistorySnapshot(file, '会话恢复', file.savedContent);
         emit('file:activated', { file: file, index: activeFileIndex, modified: nextModified });
         publishList(); await restoreHandlesFromDB(); configureServerWatch();
@@ -699,7 +743,9 @@
       });
       document.addEventListener('visibilitychange', function() { if (!document.hidden) { pollLocal(); pollServer(); } });
       global.addEventListener('focus', function() { pollLocal(); pollServer(); });
-      global.addEventListener('beforeunload', function() { saveSession(true); });
+      global.addEventListener('beforeunload', function() {
+        if (!exitPrepared) saveSession(true, { status: 'running' });
+      });
     }
     async function start() {
       if (started) return api;
@@ -709,6 +755,8 @@
       autoWatchTimer = setInterval(pollLocal, 1000);
       sessionTimer = setInterval(saveSession, 5000);
       await restoreSession();
+      markSessionDirty();
+      saveSession(true, { status: 'running' });
       return api;
     }
 
@@ -732,7 +780,7 @@
       switchFile: switchFile, closeFile: closeFile,
       listFiles: listFiles, getActiveFile: getActiveFile, getActiveIndex: getActiveIndex,
       hasUnsavedChanges: hasUnsavedChanges, getUnsavedFileNames: getUnsavedFileNames,
-      isSavePending: isSavePending,
+      isSavePending: isSavePending, prepareExit: prepareExit,
       updateActiveContent: updateActiveContent, getCurrentContent: getCurrentContent,
       replaceActiveContent: replaceActiveContent, setModified: setModified,
       relinkCurrentFile: relinkCurrentFile, markSessionDirty: markSessionDirty,
