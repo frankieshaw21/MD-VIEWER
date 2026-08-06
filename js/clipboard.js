@@ -399,16 +399,6 @@
         const selectedTable = tables.createSelectedTableClone();
         if (selectedTable) return setFeishuTableClipboard(event, selectedTable, 'preview-range');
       }
-      const selection = win.getSelection();
-      const activeCell = tables.getActiveCell();
-      const table = activeCell && activeCell.closest('table');
-      if (table && selection && selection.rangeCount) {
-        const anchor = selection.anchorNode && (selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement);
-        const focus = selection.focusNode && (selection.focusNode.nodeType === 1 ? selection.focusNode : selection.focusNode.parentElement);
-        if (anchor && focus && table.contains(anchor) && table.contains(focus)) {
-          return setFeishuTableClipboard(event, table, 'preview');
-        }
-      }
       const selectedRoot = getPreviewSelectionRoot();
       return selectedRoot ? setFeishuDocumentClipboard(event, selectedRoot, 'preview') : false;
     }

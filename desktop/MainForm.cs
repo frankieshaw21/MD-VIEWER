@@ -147,6 +147,17 @@ internal sealed class MainForm : Form
                     var stat = new FileInfo(statPath);
                     Reply(id, new { exists = stat.Exists, lastModified = stat.Exists ? stat.LastWriteTimeUtc.ToFileTimeUtc() / 10000 - 11644473600000 : 0, size = stat.Exists ? stat.Length : 0 });
                     break;
+                case "open-external":
+                    var externalUri = RequireExternalUri(GetString(root, "url"));
+                    OpenExternal(externalUri.AbsoluteUri);
+                    Reply(id, true);
+                    break;
+                case "resolve-link":
+                    var basePath = RequireAllowedPath(GetString(root, "basePath"));
+                    var resolvedLink = ResolveDocumentLink(basePath, GetString(root, "href"));
+                    Grant(new[] { resolvedLink.Path });
+                    Reply(id, new { path = resolvedLink.Path, fragment = resolvedLink.Fragment });
+                    break;
                 case "choose-default":
                     FileAssociations.OpenDefaultApps();
                     Reply(id, true);
@@ -300,8 +311,58 @@ internal sealed class MainForm : Form
     private static string GetString(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
 
+    private static Uri RequireExternalUri(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https" or "mailto") ||
+            uri.Host.Equals("mdviewer.local", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("仅支持打开 HTTP、HTTPS 或邮件链接。");
+        return uri;
+    }
+
+    private static (string Path, string Fragment) ResolveDocumentLink(string basePath, string href)
+    {
+        if (string.IsNullOrWhiteSpace(href)) throw new InvalidOperationException("链接地址为空。");
+        var value = href.Trim();
+        var fragment = "";
+        var fragmentIndex = value.IndexOf('#');
+        if (fragmentIndex >= 0)
+        {
+            fragment = Uri.UnescapeDataString(value[(fragmentIndex + 1)..]);
+            value = value[..fragmentIndex];
+        }
+        var queryIndex = value.IndexOf('?');
+        if (queryIndex >= 0) value = value[..queryIndex];
+        if (string.IsNullOrWhiteSpace(value)) return (basePath, fragment);
+
+        string target;
+        if (value.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Uri.TryCreate(value, UriKind.Absolute, out var fileUri) || !fileUri.IsFile)
+                throw new InvalidOperationException("本地文件链接格式无效。");
+            target = fileUri.LocalPath;
+        }
+        else
+        {
+            var decoded = Uri.UnescapeDataString(value).Replace('/', Path.DirectorySeparatorChar);
+            target = Path.IsPathRooted(decoded)
+                ? decoded
+                : Path.Combine(Path.GetDirectoryName(basePath) ?? "", decoded);
+        }
+
+        target = Path.GetFullPath(target);
+        if (!File.Exists(target)) throw new FileNotFoundException("链接指向的文件不存在。", target);
+        if (!IsSupported(target)) throw new InvalidOperationException("本地链接仅支持 Markdown 和文本文件。");
+        return (target, fragment);
+    }
+
     private static void OpenExternal(string uri)
     {
-        try { Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true }); } catch { }
+        try
+        {
+            var external = RequireExternalUri(uri);
+            Process.Start(new ProcessStartInfo(external.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch { }
     }
 }

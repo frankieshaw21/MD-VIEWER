@@ -182,6 +182,64 @@
       } else fallback();
     }
 
+    function linkSlug(value) {
+      return String(value || '').trim().toLowerCase()
+        .replace(/[^\w\u00c0-\uffff\s-]/g, '')
+        .replace(/\s+/g, '-').replace(/-+/g, '-');
+    }
+    function decodeFragment(value) {
+      try { return decodeURIComponent(String(value || '').replace(/^#/, '')); }
+      catch (error) { return String(value || '').replace(/^#/, ''); }
+    }
+    function scrollToLinkFragment(fragment) {
+      const decoded = decodeFragment(fragment);
+      if (!decoded) return false;
+      let target = document.getElementById(decoded) || document.querySelector('[name="' + CSS.escape(decoded) + '"]');
+      if (!target) {
+        const slug = linkSlug(decoded);
+        target = Array.from(editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6')).find(function(heading) {
+          return heading.textContent.trim() === decoded || linkSlug(heading.textContent) === slug;
+        });
+      }
+      if (!target) return false;
+      let details = target.closest('details');
+      while (details) {
+        details.open = true;
+        details = details.parentElement && details.parentElement.closest('details');
+      }
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
+    }
+    async function followEditorLink(link) {
+      const rawHref = String(link.getAttribute('href') || '').trim();
+      if (!rawHref || /^javascript:/i.test(rawHref)) return false;
+      if (rawHref.charAt(0) === '#') return scrollToLinkFragment(rawHref);
+
+      const desktop = namespace.Desktop;
+      if (/^(https?:|mailto:)/i.test(rawHref)) {
+        if (desktop && desktop.available && typeof desktop.openExternal === 'function') {
+          await desktop.openExternal(rawHref);
+        } else global.open(rawHref, '_blank', 'noopener');
+        emit('link:opened', { href: rawHref, type: 'external' });
+        return true;
+      }
+
+      const activeFile = files.getActiveFile();
+      if (desktop && desktop.available && typeof desktop.resolveLink === 'function' && activeFile && activeFile.desktopPath) {
+        const resolved = await desktop.resolveLink(rawHref, activeFile.desktopPath);
+        await files.openDesktopFile(resolved.path);
+        if (resolved.fragment) global.setTimeout(function() { scrollToLinkFragment(resolved.fragment); }, 0);
+        emit('link:opened', { href: rawHref, type: 'document', path: resolved.path });
+        return true;
+      }
+
+      const resolvedUrl = new URL(rawHref, global.location.href);
+      if (!/^(https?:|mailto:)$/.test(resolvedUrl.protocol)) return false;
+      global.open(resolvedUrl.href, '_blank', 'noopener');
+      emit('link:opened', { href: resolvedUrl.href, type: 'external' });
+      return true;
+    }
+
     function updateMinimap() {
       const minimap = document.getElementById('minimap'); const thumb = document.getElementById('minimapThumb');
       const total = wrapper.scrollHeight; const visible = wrapper.clientHeight;
@@ -262,6 +320,17 @@
         if (!palette.palette.contains(event.target) && !palette.button.contains(event.target)) hideTextColorPalette();
       });
       editorEl.addEventListener('click', function(event) {
+        const link = event.target.closest('a[href]');
+        if (link) {
+          const selection = global.getSelection();
+          if (selection && !selection.isCollapsed) return;
+          event.preventDefault();
+          followEditorLink(link).catch(function(error) {
+            console.error('Unable to open link.', error);
+            alert('无法打开链接：' + error.message);
+          });
+          return;
+        }
         const copy = event.target.closest('.code-copy-btn');
         if (copy) {
           // Parser-rendered buttons keep the compatibility onclick bridge; only

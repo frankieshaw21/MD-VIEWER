@@ -71,6 +71,8 @@
     readFile: function(path) { return request('read-file', { path: path }); },
     writeFile: function(path, content) { return request('write-file', { path: path, content: content }); },
     statFile: function(path) { return request('stat-file', { path: path }); },
+    openExternal: function(url) { return request('open-external', { url: url }); },
+    resolveLink: function(href, basePath) { return request('resolve-link', { href: href, basePath: basePath }); },
     chooseDefaultApp: function() { return request('choose-default'); }
   });
   global.chooseDefaultApp = function() {
