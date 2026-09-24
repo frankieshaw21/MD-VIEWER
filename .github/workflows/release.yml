@@ -1,0 +1,51 @@
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to package
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build and verify desktop app
+        shell: pwsh
+        run: ./desktop/build.ps1
+
+      - name: Package desktop app
+        shell: pwsh
+        run: |
+          $version = '${{ inputs.tag || github.ref_name }}'
+          $archive = "MDViewer-$version-win-x64.zip"
+          Compress-Archive -Path ./desktop/publish/* -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Set-Content "$archive.sha256" -Encoding ascii
+          "ARCHIVE=$archive" >> $env:GITHUB_ENV
+
+      - name: Create GitHub Release and upload package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = '${{ inputs.tag || github.ref_name }}'
+          gh release create $tag "$env:ARCHIVE" "$env:ARCHIVE.sha256" --title "MD Viewer $tag" --generate-notes --verify-tag
