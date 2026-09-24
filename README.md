@@ -4,6 +4,12 @@
 
 一个面向 Windows 的本地 Markdown 阅读与编辑工具。无需安装依赖或构建，支持离线运行，并针对大文档、表格编辑和飞书复制粘贴做了优化。
 
+## UI Demo
+
+[![MD Viewer 界面方案演示预览](demo/ui-concept.png)](demo/ui-concept.html)
+
+这是**独立的界面方案演示，并非当前正式应用界面**。要体验交互，请下载仓库后用浏览器打开 [`demo/ui-concept.html`](demo/ui-concept.html)；GitHub 的文件预览不会运行 HTML。Demo 不会读取或保存真实文件。
+
 ## 主要功能
 
 - 预览、Markdown 源码及源码/预览分屏编辑，支持 H1–H6 大纲和精确跳转
