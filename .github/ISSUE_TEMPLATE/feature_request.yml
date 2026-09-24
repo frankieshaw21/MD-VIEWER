@@ -1,0 +1,25 @@
+name: 功能建议
+about: 提议改进现有体验或新增功能
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: "请先搜索现有 Issue；一个 Issue 只讨论一项建议。"
+  - type: textarea
+    id: problem
+    attributes:
+      label: 需要解决的问题
+      description: 描述使用场景和当前遇到的困难。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的解决方式
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方式
+      description: 可选。

@@ -62,6 +62,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\md-viewer-server.ps1
 
 页面内的“重新加载”只重新读取当前 Markdown。Viewer 源码更新后，请关闭旧页面重新打开，或使用 `Ctrl+F5` 强制刷新。
 
+## 社区与项目治理
+
+- 反馈问题或提出建议：使用仓库的 [Issues](https://github.com/bwj6wjrtsk-hash/MD-VIEWER/issues) 模板。
+- 提交改动：阅读 [参与贡献](CONTRIBUTING.md)，并使用 PR 模板说明验证情况。
+- 报告安全漏洞：阅读 [安全政策](SECURITY.md)，不要公开披露漏洞详情。
+
 ## 数据与隐私
 
 所有处理均在本机完成，不包含云端协作或数据上传功能。历史记录保存在浏览器 IndexedDB 中，会话和界面设置保存在 localStorage 中；清理浏览器站点数据会同时删除这些本地数据。

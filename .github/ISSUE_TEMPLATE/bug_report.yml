@@ -1,0 +1,52 @@
+name: 缺陷报告
+about: 报告可复现的问题
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "提交前请搜索已有 Issue。安全漏洞请按 SECURITY.md 私密报告，不要在此公开。"
+  - type: input
+    id: version
+    attributes:
+      label: MD Viewer 版本
+      description: 例如 v0.1.2；源码运行请填写提交号。
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 使用方式
+      options:
+        - Windows 桌面安装版
+        - 本地服务 / VBS 启动
+        - 浏览器直接打开 HTML
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: 系统与浏览器 / WebView2 版本
+      placeholder: Windows 11 x64，WebView2 版本（如已知）
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请使用不含隐私信息的示例 Markdown。
+      placeholder: "1. 打开...\n2. 点击...\n3. 出现..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果与日志
+      description: 如有截图、错误信息或日志请附上，并先清除敏感内容。
+    validations:
+      required: true
