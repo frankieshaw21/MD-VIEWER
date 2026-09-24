@@ -39,8 +39,8 @@ body {
 .toolbar button.active { background: #ddd; color: #111; }
 .toolbar .sep { width: 1px; height: 20px; background: #ddd; margin: 0 6px; }
 .toolbar .spacer { flex: 1; }
-.toolbar .filename { font-size: 12px; color: #999; transition: color 0.3s; }
-.toolbar .filename.modified::before { content: "● "; color: #f0a020; }
+.status-bar .filename { min-width: 0; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #777; }
+.status-bar .filename.modified::before { content: "● "; color: #f0a020; }
 
 /* Custom tooltip */
 .toolbar button[data-tip]::after {
@@ -327,6 +327,20 @@ body.source-mode .source-panel { display: block; }
   flex-shrink: 0;
   transition: background 0.3s, border-color 0.3s;
 }
+.status-refresh {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid #d5dce6;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.status-refresh:hover, .status-refresh:focus-visible { color: #2862c4; border-color: #2862c4; outline: none; }
+body.dark .status-refresh { border-color: #555; }
+body.eye-care .status-refresh { border-color: #b8d4b8; }
 
 /* Drag overlay */
 .drag-overlay {

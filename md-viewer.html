@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Markdown Editor</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%234a90d9'/><path d='M5 22V10h4l3 5 3-5h4v12h-4v-6l-3 4-3-4v6H5zm17-12v12h3l4-5v5h3V10h-3l-4 5v-5h-3z' fill='white'/></svg>">
-<link rel="stylesheet" href="assets/md-viewer.css?v=20260804-5">
+<link rel="stylesheet" href="assets/md-viewer.css?v=20260804-6">
 </head>
 <body>
 <div class="drag-overlay" id="dragOverlay">📄 拖放 .md 文件到这里</div>
@@ -110,7 +110,6 @@
 <div class="app">
   <div class="toolbar">
     <button onclick="openFile()" data-tip="打开文件 Ctrl+O">📂</button>
-    <button onclick="reloadFile()" data-tip="重新加载 Ctrl+R">🔄</button>
     <button onclick="saveFile()" data-tip="保存 Ctrl+S">💾</button>
     <button onclick="saveAll()" data-tip="全部保存 Ctrl+Shift+S">💾+</button>
     <button onclick="showHistory()" data-tip="历史记录">🕘</button>
@@ -147,7 +146,6 @@
     <button onclick="toggleTheme()" id="themeBtn" data-tip="切换主题">🌙</button>
     <button onclick="chooseDefaultApp()" id="desktopDefaultBtn" data-tip="设为 Markdown 默认应用" style="display:none">默认</button>
     <span class="spacer"></span>
-    <span class="filename" id="filename">未打开文件</span>
   </div>
 
   <div class="main">
@@ -185,11 +183,13 @@
   </div>
 
   <div class="status-bar">
+    <span class="filename" id="filename">未打开文件</span>
     <span id="wordCount">字数: 0</span>
     <span id="lineCount">段落: 0</span>
     <span id="lastModified">更新时间: --</span>
     <span id="modifiedIndicator"></span>
     <span id="linkFileHint" onclick="relinkCurrentFile()" title="点击授权或重新选择文件，以启用外部修改实时更新" style="display:none;cursor:pointer;color:#b36b00;">⚠ 点击授权文件访问，启用实时更新</span>
+    <button type="button" class="status-refresh" onclick="reloadFile()" title="重新加载当前文件 Ctrl+R">↻ 更新</button>
   </div>
 </div>
 
