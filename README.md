@@ -1,5 +1,7 @@
 # MD Viewer
 
+当前版本：`0.1.0`（版本历史见 [CHANGELOG.md](CHANGELOG.md)）。
+
 一个面向 Windows 的本地 Markdown 阅读与编辑工具。无需安装依赖或构建，支持离线运行，并针对大文档、表格编辑和飞书复制粘贴做了优化。
 
 ## 主要功能
