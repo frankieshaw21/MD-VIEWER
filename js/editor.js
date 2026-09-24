@@ -78,11 +78,12 @@
     function updateCounts() {
       const sourceMode = isSourceMode();
       const text = sourceMode ? sourceEditor.value : (editorEl.innerText || '');
-      wordCountEl.textContent = '字数: ' + text.replace(/\s/g, '').length;
+      const characters = text.replace(/\s/g, '').length;
+      wordCountEl.textContent = '字数: ' + characters;
       lineCountEl.textContent = sourceMode
         ? '段落: ' + (text ? text.split(/\n/).length : 0)
         : '段落: ' + editorEl.children.length;
-      emit('document:counts', { characters: text.replace(/\s/g, '').length });
+      emit('document:counts', { characters: characters });
     }
 
     function cancelFlush() {
@@ -946,16 +947,18 @@
     function updateActiveHeading() {
       if (isSourceOnlyMode() || !outlineList || !editorWrapper) return;
       const headings = editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6');
+      const items = outlineList.children;
+      if (!headings.length || !items.length) return;
       let active = 0;
-      const top = editorWrapper.getBoundingClientRect().top;
-      headings.forEach(function(heading, index) {
-        if (heading.getBoundingClientRect().top - top <= 60) active = index;
-      });
-      Array.from(outlineList.children).forEach(function(item, index) {
-        item.classList.toggle('active-heading', index === active);
-      });
-      const item = outlineList.children[active];
-      if (item) item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const threshold = editorWrapper.getBoundingClientRect().top + 60;
+      // Headings are in document order; stop at the first one below the viewport edge.
+      for (let index = 0; index < headings.length; index++) {
+        if (headings[index].getBoundingClientRect().top > threshold) break;
+        active = index;
+      }
+      for (let index = 0; index < items.length; index++) {
+        items[index].classList.toggle('active-heading', index === active);
+      }
     }
 
     function bind() {

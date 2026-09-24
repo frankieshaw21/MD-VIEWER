@@ -503,7 +503,8 @@
       if (serverWatchTimer) { clearInterval(serverWatchTimer); serverWatchTimer = null; }
       serverMtime = null;
       if (context.env.isServerMode && getActiveFile() && getActiveFile().serverPath) {
-        serverWatchTimer = setInterval(pollServer, 800); pollServer();
+        // Poll only while visible, and avoid frequent network wakeups when idle.
+        serverWatchTimer = setInterval(pollServer, 3000); pollServer();
       }
     }
 
@@ -752,8 +753,10 @@
       editor = context.getPort('editor'); history = context.getPort('history');
       if (!editor || !history) throw new Error('Files dependencies are incomplete');
       started = true; bind();
-      autoWatchTimer = setInterval(pollLocal, 1000);
-      sessionTimer = setInterval(saveSession, 5000);
+      // File metadata and session state rarely need sub-second polling; visibility
+      // handlers trigger an immediate refresh when the user returns to the app.
+      autoWatchTimer = setInterval(pollLocal, 5000);
+      sessionTimer = setInterval(saveSession, 15000);
       await restoreSession();
       markSessionDirty();
       saveSession(true, { status: 'running' });
