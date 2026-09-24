@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MD Viewer · UI 方案演示</title>
+<style>
+:root{font-family:system-ui,"Microsoft YaHei",sans-serif;color:#263348;background:#edf1f6}*{box-sizing:border-box}body{margin:0;padding:30px}button{font:inherit;cursor:pointer}header{max-width:1120px;margin:0 auto 16px}header h1{font-size:21px;margin:0 0 6px}header p{font-size:13px;color:#65748a;margin:0}.app{max-width:1120px;height:min(720px,80vh);min-height:480px;margin:auto;background:white;border:1px solid #dce3ec;border-radius:14px;box-shadow:0 14px 48px #25365118;display:flex;flex-direction:column;overflow:hidden}.toolbar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #e6ebf2;flex-wrap:wrap}.brand{font-weight:700;color:#2862c4;margin-right:10px;white-space:nowrap}.group{display:flex;gap:5px;align-items:center}.btn{border:1px solid transparent;background:transparent;color:#36465d;padding:7px 10px;border-radius:7px;white-space:nowrap}.btn:hover,.btn:focus-visible{background:#edf3ff;outline:2px solid transparent}.btn:focus-visible{outline-color:#527bda}.btn.primary{background:#2862c4;color:white}.btn.primary:hover{background:#1b50aa}.btn.active{background:#e4edff;color:#164fa9}.spacer{flex:1}.filename{font-size:13px;color:#53647c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}.status{font-size:12px;padding:6px 9px;border-radius:30px;white-space:nowrap;background:#edf7f1;color:#258052}.status.dirty{background:#fff2de;color:#a46109}.status.saving{background:#e7efff;color:#3466b5}.status.error{background:#ffebed;color:#b32b3b}.menu-wrap{position:relative}.menu{position:absolute;top:40px;left:0;width:190px;padding:5px;background:#fff;border:1px solid #dce3ec;box-shadow:0 12px 30px #26334825;border-radius:9px;z-index:3}.menu[hidden]{display:none}.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:9px;border-radius:5px;color:#34445a}.menu button:hover,.menu button:focus-visible{background:#edf3ff}.body{flex:1;min-height:0;display:flex}.sidebar{width:196px;background:#f8fafd;border-right:1px solid #e6ebf2;padding:18px 10px;font-size:13px}.sidebar b{display:block;color:#79889e;font-size:11px;padding:0 10px 12px}.file{background:#e8f0ff;color:#1d58b4;border-radius:7px;padding:9px}.content{flex:1;overflow:auto;padding:35px clamp(18px,5vw,70px)}.paper{max-width:720px;margin:auto;line-height:1.8}.paper h2{margin:0;font-size:28px}.paper p{color:#586b83}.paper blockquote{margin:20px 0;padding:12px 16px;border-left:4px solid #5487e9;background:#f5f8ff;border-radius:0 8px 8px 0}.paper textarea{width:100%;min-height:340px;border:1px solid #dce3ec;border-radius:8px;padding:18px;resize:vertical;font:14px/1.8 Consolas,monospace}.foot{padding:8px 16px;border-top:1px solid #e6ebf2;color:#7b8799;font-size:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.foot #updatedAt{margin-left:auto}.foot .btn{padding:3px 9px;border:1px solid #dce3ec}@media(max-width:700px){body{padding:12px}.app{height:85vh}.sidebar{display:none}.brand{margin-right:0}.toolbar{gap:4px}.filename{max-width:110px}.optional{display:none}}
+</style>
+</head>
+<body>
+<header><h1>MD Viewer · 界面方案演示</h1><p>独立静态 Demo，不会修改或保存真实文件。试试「插入」、模式切换、编辑与保存。</p></header>
+<div class="app">
+  <div class="toolbar" role="toolbar" aria-label="文档工具栏">
+    <span class="brand">▤ MD Viewer</span>
+    <div class="group"><button class="btn" id="open" title="打开示例文档">📂 打开</button><button class="btn primary" id="save" title="保存 Ctrl+S">💾 保存</button></div>
+    <div class="menu-wrap"><button class="btn" id="insert" aria-expanded="false" aria-haspopup="menu">＋ 插入 ▾</button><div class="menu" id="menu" role="menu" hidden><button role="menuitem" data-insert="heading">标题</button><button role="menuitem" data-insert="list">列表</button><button role="menuitem" data-insert="code">代码块</button><button role="menuitem" data-insert="table">表格</button><button role="menuitem" data-insert="diagram">Mermaid 图表</button></div></div>
+    <button class="btn optional" id="bold" title="粗体 Ctrl+B"><b>B</b></button><button class="btn optional" id="italic" title="斜体 Ctrl+I"><i>I</i></button>
+    <span class="spacer"></span><span class="status" id="status" role="status" aria-live="polite">✓ 已保存</span><button class="btn active" id="preview" aria-pressed="true">预览</button><button class="btn" id="source" aria-pressed="false">源码</button>
+  </div>
+  <div class="body"><aside class="sidebar"><b>打开的文件</b><div class="file" id="sidefile">▤ 欢迎使用.md</div></aside><main class="content"><article class="paper" id="paper" contenteditable="true" aria-label="Markdown 预览编辑区"><h2>欢迎使用 MD Viewer</h2><p>更聚焦的工具栏：高频操作直接可见，其余操作收进「插入」菜单。</p><blockquote>编辑这段文字，观察右上角保存状态的变化。</blockquote><p>这是仅用于评估视觉与交互的独立 Demo。</p></article><div class="paper" id="sourcePanel" hidden><textarea id="textarea" aria-label="Markdown 源码"># 欢迎使用 MD Viewer\n\n更聚焦的工具栏：高频操作直接可见，其余操作收进「插入」菜单。\n\n> 编辑这段文字，观察右上角保存状态的变化。\n\n这是仅用于评估视觉与交互的独立 Demo。</textarea></div></main></div>
+  <div class="foot"><span>Demo · 本页面不会读写磁盘</span><span id="count">可在预览区直接编辑</span><span id="updatedAt">更新时间：--</span><button class="btn" id="refresh" title="重新加载文档（Demo 中会重置内容）">↻ 更新</button></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),status=$('status'),menu=$('menu');let mode='preview',timer;
+function updateTime(){ $('updatedAt').textContent='更新时间：'+new Date().toLocaleString('zh-CN',{hour12:false}) }
+function state(text,kind){status.textContent=text;status.className='status '+(kind||'');$('sidefile').textContent=(kind==='dirty'?'● ':'▤ ')+'欢迎使用.md'}
+function dirty(){clearTimeout(timer);state('● 未保存','dirty')}
+$('paper').addEventListener('input',dirty);$('textarea').addEventListener('input',dirty);
+$('save').onclick=()=>{clearTimeout(timer);state('◌ 保存中…','saving');timer=setTimeout(()=>{state('✓ 已保存');updateTime()},650)};
+$('refresh').onclick=()=>{if(!confirm('重新加载演示文档？当前未保存的改动会丢失。'))return;location.reload()};
+updateTime();
+$('open').onclick=()=>{if(confirm('重新打开演示文档？当前 Demo 中的改动会丢失。'))location.reload()};
+function switchMode(next){if(mode===next)return;mode=next;$('paper').hidden=next==='source';$('sourcePanel').hidden=next==='preview';['preview','source'].forEach(id=>{$(id).classList.toggle('active',id===next);$(id).setAttribute('aria-pressed',String(id===next))});$('count').textContent=next==='source'?'源码演示，不与预览内容同步':'可在预览区直接编辑'}
+$('preview').onclick=()=>switchMode('preview');$('source').onclick=()=>switchMode('source');
+['bold','italic'].forEach(id=>{$(id).onclick=()=>{if(mode!=='preview')return;document.execCommand(id);$('paper').focus();dirty()}});
+$('insert').onclick=()=>{menu.hidden=!menu.hidden;$('insert').setAttribute('aria-expanded',String(!menu.hidden))};
+menu.onclick=e=>{const b=e.target.closest('[data-insert]');if(!b)return;const text={heading:'新标题',list:'新列表',code:'示例代码',table:'新表格',diagram:'Mermaid 图表'}[b.dataset.insert];if(mode==='source')$('textarea').value+='\n## '+text;else $('paper').insertAdjacentHTML('beforeend','<p>'+text+'</p>');menu.hidden=true;$('insert').setAttribute('aria-expanded','false');dirty()};
+document.addEventListener('click',e=>{if(!e.target.closest('.menu-wrap')){menu.hidden=true;$('insert').setAttribute('aria-expanded','false')}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){menu.hidden=true;$('insert').setAttribute('aria-expanded','false')}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();$('save').click()}});
+</script>
+</body></html>
