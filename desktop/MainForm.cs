@@ -16,6 +16,7 @@ internal sealed class MainForm : Form
     private bool _pageReady;
     private bool _allowClose;
     private bool _closeCheckInProgress;
+    private bool _checkingUpdates;
 
     public MainForm(string[] initialPaths, SingleInstanceCoordinator instance)
     {
@@ -25,13 +26,48 @@ internal sealed class MainForm : Form
         MinimumSize = new Size(800, 560);
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(_webView);
+        var menu = new MenuStrip();
+        var help = new ToolStripMenuItem("帮助");
+        help.DropDownItems.Add("检查更新", null, async (_, _) => await CheckUpdatesAsync(true));
+        menu.Items.Add(help);
+        MainMenuStrip = menu;
+        Controls.Add(menu);
         _trustedPathsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MDViewer", "trusted-files.json");
         LoadTrustedPaths();
         Grant(initialPaths);
         _pendingPaths.Enqueue(initialPaths);
         instance.PathsReceived += paths => BeginInvoke(new Action(() => ReceivePaths(paths)));
-        Load += async (_, _) => await InitializeWebViewAsync();
+        Load += async (_, _) =>
+        {
+            await InitializeWebViewAsync();
+            await CheckUpdatesAsync(false);
+        };
         FormClosing += HandleFormClosing;
+    }
+
+    private async Task CheckUpdatesAsync(bool manual)
+    {
+        if (_checkingUpdates) return;
+        _checkingUpdates = true;
+        try
+        {
+            var update = await UpdateChecker.GetLatestAsync();
+            if (IsDisposed) return;
+            if (update is null)
+            {
+                if (manual) MessageBox.Show(this, "当前已是最新版本（" + UpdateChecker.CurrentVersion + "）。", "检查更新");
+                return;
+            }
+            if (MessageBox.Show(this,
+                $"发现新版本 {update.Value.Version}（当前 {UpdateChecker.CurrentVersion}）。\n\n是否前往 GitHub 发布页面查看更新说明并下载安装包？\n选择“否”将继续使用当前版本。",
+                "MD Viewer 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                OpenExternal(update.Value.Url);
+        }
+        catch (Exception error)
+        {
+            if (manual && !IsDisposed) MessageBox.Show(this, "检查更新失败：" + error.Message + "\n请稍后重试。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally { _checkingUpdates = false; }
     }
 
     private async Task InitializeWebViewAsync()
