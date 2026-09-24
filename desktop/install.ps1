@@ -1,16 +1,17 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $source = Join-Path $PSScriptRoot 'publish'
 $runtimeInstaller = Join-Path $PSScriptRoot 'MicrosoftEdgeWebView2RuntimeInstallerX64.exe'
 
 try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new() } catch { }
 Write-Host 'MD Viewer 一键安装' -ForegroundColor Cyan
 Write-Host '正在检查安装文件和运行组件…'
+$client = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
 $runtimeInstalled = @(
-    'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\*',
-    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\*',
-    'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\*'
+    "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$client",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$client",
+    "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$client"
 ) | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } |
-    Where-Object { $_.name -eq 'Microsoft Edge WebView2 Runtime' -and $_.pv } | Select-Object -First 1
+    Where-Object { $_.pv -and $_.pv -ne '0.0.0.0' } | Select-Object -First 1
 if (-not $runtimeInstalled) {
     if (-not (Test-Path $runtimeInstaller -PathType Leaf)) {
         throw 'WebView2 Runtime is missing, and the offline installer is not present. Use the complete release package.'
