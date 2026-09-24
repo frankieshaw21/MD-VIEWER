@@ -6,6 +6,16 @@
 
 暂无。
 
+## [0.1.3] - 2026-09-24
+
+### 新增
+- 桌面版启动时可提示 GitHub 正式版更新，也可通过“帮助 → 检查更新”手动检查；安装仍需用户确认。
+- 新增独立 UI 方案演示，首页 README 提供预览图与入口。
+
+### 改进
+- 文档元数据与重新加载入口移至状态栏。
+- 完善项目文档及社区反馈、贡献模板。
+
 ## [0.1.2] - 2026-09-24
 
 ### 修复
@@ -27,6 +37,7 @@
 ### 说明
 - 外部文件修改的定时发现可能略有延迟；手动打开、重载和保存功能不受影响。
 
+[0.1.3]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.3
 [0.1.2]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.2
 [0.1.1]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.1
 [0.1.0]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.0
