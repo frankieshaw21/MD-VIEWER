@@ -28,19 +28,34 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Download offline WebView2 Runtime installer
+        shell: pwsh
+        run: |
+          $installer = Join-Path $PWD 'desktop/MicrosoftEdgeWebView2RuntimeInstallerX64.exe'
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $installer
+          if ((Get-Item $installer).Length -lt 50MB) { throw 'Downloaded WebView2 offline installer is unexpectedly small.' }
+
       - name: Build and verify desktop app
         shell: pwsh
         run: ./desktop/build.ps1
 
-      - name: Package desktop app
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Build single-file installer
         shell: pwsh
         run: |
-          $version = '${{ inputs.tag || github.ref_name }}'
-          $archive = "MDViewer-$version-win-x64.zip"
-          Compress-Archive -Path ./desktop/publish/* -DestinationPath $archive -CompressionLevel Optimal
-          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $archive" | Set-Content "$archive.sha256" -Encoding ascii
-          "ARCHIVE=$archive" >> $env:GITHUB_ENV
+          $version = '${{ inputs.tag || github.ref_name }}'.TrimStart('v')
+          $env:APP_VERSION = $version
+          & "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe" ./desktop/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup packaging failed.' }
+          $installer = Get-ChildItem ./desktop/publish-installer/*.exe | Select-Object -First 1
+          if (-not $installer) { throw 'Installer executable was not produced.' }
+          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content "$($installer.FullName).sha256" -Encoding ascii
+          "INSTALLER=$($installer.FullName)" >> $env:GITHUB_ENV
+          "CHECKSUM=$($installer.FullName).sha256" >> $env:GITHUB_ENV
 
       - name: Create GitHub Release and upload package
         env:
@@ -48,4 +63,4 @@ jobs:
         shell: pwsh
         run: |
           $tag = '${{ inputs.tag || github.ref_name }}'
-          gh release create $tag "$env:ARCHIVE" "$env:ARCHIVE.sha256" --title "MD Viewer $tag" --generate-notes --verify-tag
+          gh release create $tag "$env:INSTALLER" "$env:CHECKSUM" --title "MD Viewer $tag" --generate-notes --verify-tag

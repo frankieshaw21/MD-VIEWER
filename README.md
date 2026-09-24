@@ -25,7 +25,7 @@
 powershell -ExecutionPolicy Bypass -File .\desktop\install.ps1
 ```
 
-安装后可在工具栏点击“默认”，进入 Windows 设置确认将 MD Viewer 设为 Markdown 默认应用。桌面版不启动 localhost 服务；构建与卸载说明见 `desktop/README.md`。Windows x64 软件包发布在 GitHub [Releases](https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases)，下载 ZIP 并解压后运行 `install.ps1` 安装；首次发布由推送 `v*` 版本标签自动构建并上传软件包及 SHA-256 校验文件。
+普通用户从 GitHub [Releases](https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases) 下载 `MDViewer-Setup-版本号-win-x64.exe`，双击并按安装向导操作即可。安装程序包含 WebView2 离线运行组件，安装时无需联网或预装 .NET SDK。详见 [`desktop/README.md`](desktop/README.md#普通用户一键安装)。推送 `v*` 版本标签会自动构建并上传软件包及 SHA-256 校验文件。桌面版不启动 localhost 服务。
 
 ### 便携网页版：双击启动
 

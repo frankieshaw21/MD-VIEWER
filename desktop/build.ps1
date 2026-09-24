@@ -3,7 +3,8 @@ $project = Join-Path $PSScriptRoot 'MDViewer.Desktop.csproj'
 $output = Join-Path $PSScriptRoot 'publish'
 $candidates = @(
     (Join-Path $env:LOCALAPPDATA 'MDViewerDev\dotnet\dotnet.exe'),
-    (Join-Path $env:ProgramFiles 'dotnet\dotnet.exe')
+    (Join-Path $env:ProgramFiles 'dotnet\dotnet.exe'),
+    (Get-Command dotnet -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
 )
 $dotnet = $candidates | Where-Object { Test-Path $_ } | Where-Object {
     (& $_ --list-sdks 2>$null) -match '^8\.'

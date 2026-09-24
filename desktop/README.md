@@ -2,21 +2,24 @@
 
 这是基于 WebView2 的 Windows 桌面外壳，复用根目录中的 Viewer 前端。
 
-## 构建
+## 普通用户：一键安装
+
+1. 打开 [GitHub Releases](https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases)，下载 `MDViewer-Setup-版本号-win-x64.exe`。
+2. 双击安装程序，按向导完成安装。安装包内含 .NET 应用和 WebView2 Runtime 离线安装程序；无需解压、运行命令或联网下载依赖。首次安装可能出现 Windows 管理员权限确认。
+3. 安装完成后从开始菜单启动 MD Viewer。需要双击 `.md` 文件打开时，在应用工具栏点击“默认”，并按 Windows 提示确认默认应用。
+
+同一 Release 提供 `.sha256` 校验文件。可通过 PowerShell `Get-FileHash .\MDViewer-Setup-版本号-win-x64.exe -Algorithm SHA256` 核对下载文件。
+
+## 开发者：从源码构建安装
+
+需要安装 .NET 8 SDK 后，在仓库根目录运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\desktop\build.ps1
-```
-
-输出：`desktop\publish\MDViewer.exe`。发布为 win-x64 自包含应用，目标电脑只需安装 Microsoft Edge WebView2 Runtime。
-
-## 安装
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\desktop\install.ps1
 ```
 
-安装到 `%LOCALAPPDATA%\Programs\MD Viewer`，创建开始菜单快捷方式，并注册 `.md` / `.markdown` 的“打开方式”。在软件工具栏点击“设为默认”，再在 Windows 设置中确认默认应用。
+构建输出为 `desktop\publish\`。安装脚本优先使用已有发布文件；若没有发布文件，才调用构建脚本。
 
 ## 卸载
 
