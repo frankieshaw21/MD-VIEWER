@@ -1,6 +1,6 @@
 # MD Viewer 桌面版
 
-这是基于 WebView2 的 Windows 桌面外壳，复用根目录中的 Viewer 前端。
+这是基于 WebView2 的 Windows 桌面外壳，复用根目录中的 Viewer 前端。主界面操作与网页版一致：顶部工具栏可打开、保存、查找、切换源码/预览与分屏，侧栏可查看文件及大纲。完整界面说明和快捷键见 [根目录 README](../README.md#界面导览)。仓库中的 [`demo/ui-concept.html`](../demo/ui-concept.html) 仅为独立界面方案演示，不是桌面版界面。
 
 ## 普通用户：一键安装
 
@@ -38,3 +38,4 @@ powershell -ExecutionPolicy Bypass -File .\desktop\uninstall.ps1
 - 仅允许读写由启动参数、原生文件选择器或已授权历史记录提供的路径
 - 监控当前文件的外部变化
 - 关闭窗口时提示未保存内容
+- 启动时检查正式版更新，也可通过菜单“帮助 → 检查更新”手动检查；更新需要用户自行下载安装

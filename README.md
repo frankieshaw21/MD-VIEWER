@@ -6,12 +6,13 @@
 
 ## 主要功能
 
-- 预览与 Markdown 源码双模式编辑，支持 H1–H6 大纲和精确跳转
+- 预览、Markdown 源码及源码/预览分屏编辑，支持 H1–H6 大纲和精确跳转
 - 多文件打开、外部修改检测、重载、保存及未保存冲突提示
 - IndexedDB 本地历史记录，每个文件最多保留 30 个版本
 - 表格合并、拆分、增删行列、整表删除和单元格背景色
 - 飞书兼容的富文本、表格、文字颜色及单元格颜色复制粘贴
-- 标题、列表、待办、引用、代码块、链接、图片和 Mermaid 图表
+- 标题、列表、待办、引用、代码块、链接、图片和 Mermaid 图表（支持缩放、全屏及导出）
+- 文档内查找与替换、区分大小写和匹配项跳转
 - 浅色、护眼、深色主题，以及标准、宽版、全宽内容布局
 - 自适应延迟渲染、增量 DOM 增强和 minimap 节流，适合大型文档
 
@@ -47,14 +48,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\md-viewer-server.ps1
 
 也可以直接双击 `md-viewer.html`，通过 `file:///` 使用。浏览器未授予文件写入权限时，保存会回退为下载同名 Markdown 文件；如需目录浏览和更稳定的外部变化检测，推荐使用 VBS 或 PowerShell 启动方式。
 
+## 界面导览
+
+实际界面以 [`md-viewer.html`](md-viewer.html) 为准：顶部工具栏提供打开、保存、全部保存、历史记录及格式/插入操作；右侧可切换“源码”“分屏”、内容宽度和主题。左侧侧栏可在“文件”和“大纲”之间切换，底部状态栏提供当前文件重新加载入口。选中表格单元格后右键可打开行列、合并拆分及背景色菜单；点击 Mermaid 图表可使用缩放、全屏与导出工具。
+
+[`demo/ui-concept.html`](demo/ui-concept.html) 是可单独打开的**界面方案演示**，用于评估工具栏与交互；它不读取或保存真实文件，也不是当前正式界面。不要在 Demo 中编辑重要内容。
+
 ## 常用操作
 
 | 操作 | 快捷键或方式 |
 | --- | --- |
 | 打开文件 | `Ctrl+O` 或拖放文件 |
-| 保存 | `Ctrl+S` |
+| 保存 / 全部保存 | `Ctrl+S` / `Ctrl+Shift+S` |
+| 查找 / 替换 | `Ctrl+F` / `Ctrl+H` |
+| 下一个 / 上一个匹配项 | `Ctrl+G` / `Ctrl+Shift+G` |
 | 重新读取 Markdown | `Ctrl+R` |
-| 切换源码/预览 | `Ctrl+/` |
+| 切换源码/预览 | `Ctrl+/`；工具栏“分屏”可同时显示两者 |
 | 粗体 / 斜体 | `Ctrl+B` / `Ctrl+I` |
 | 撤销 / 重做 | `Ctrl+Z` / `Ctrl+Y` 或 `Ctrl+Shift+Z` |
 | 表格编辑 | 在单元格上单击右键 |
@@ -86,11 +95,18 @@ MD-Viewer/
    ├─ parser.js            # Markdown/HTML 双向转换
    ├─ history.js           # IndexedDB 历史记录
    ├─ editor.js            # 编辑器、渲染、大纲和命令
+   ├─ source-tools.js      # 源码编辑辅助工具
+   ├─ search.js            # 查找与替换
+   ├─ mermaid-tools.js     # Mermaid 图表交互与导出
+   ├─ desktop.js           # 桌面宿主桥接
    ├─ files.js             # 文件、会话、刷新和冲突处理
    ├─ tables.js            # 表格结构与颜色编辑
    ├─ clipboard.js         # 飞书兼容复制粘贴
    ├─ ui.js                # 主题、侧栏、minimap 和快捷键
    └─ bootstrap.js         # 模块组合与应用启动
+
+desktop/                   # Windows WebView2 桌面宿主、构建与安装脚本
+demo/ui-concept.html       # 独立界面方案演示（非正式应用）
 ```
 
 模块通过 Context、ports 和事件总线通信，入口加载顺序定义在 `md-viewer.html` 中。
@@ -103,4 +119,4 @@ MD-Viewer/
 Get-ChildItem .\js\*.js | ForEach-Object { node --check $_.FullName }
 ```
 
-建议使用最新版 Microsoft Edge 或其他 Chromium 浏览器。文件系统写入能力取决于浏览器的 File System Access API 和用户授权。
+建议使用最新版 Microsoft Edge 或其他 Chromium 浏览器。文件系统写入能力取决于浏览器的 File System Access API 和用户授权。桌面版构建、安装及卸载说明见 [`desktop/README.md`](desktop/README.md)。
