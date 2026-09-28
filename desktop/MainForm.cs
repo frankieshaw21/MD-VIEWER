@@ -26,12 +26,6 @@ internal sealed class MainForm : Form
         MinimumSize = new Size(800, 560);
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(_webView);
-        var menu = new MenuStrip();
-        var help = new ToolStripMenuItem("帮助");
-        help.DropDownItems.Add("检查更新", null, async (_, _) => await CheckUpdatesAsync(true));
-        menu.Items.Add(help);
-        MainMenuStrip = menu;
-        Controls.Add(menu);
         _trustedPathsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MDViewer", "trusted-files.json");
         LoadTrustedPaths();
         Grant(initialPaths);
@@ -40,12 +34,12 @@ internal sealed class MainForm : Form
         Load += async (_, _) =>
         {
             await InitializeWebViewAsync();
-            await CheckUpdatesAsync(false);
+            await CheckUpdatesAsync();
         };
         FormClosing += HandleFormClosing;
     }
 
-    private async Task CheckUpdatesAsync(bool manual)
+    private async Task CheckUpdatesAsync()
     {
         if (_checkingUpdates) return;
         _checkingUpdates = true;
@@ -55,7 +49,6 @@ internal sealed class MainForm : Form
             if (IsDisposed) return;
             if (update is null)
             {
-                if (manual) MessageBox.Show(this, "当前已是最新版本（" + UpdateChecker.CurrentVersion + "）。", "检查更新");
                 return;
             }
             if (MessageBox.Show(this,
@@ -65,7 +58,7 @@ internal sealed class MainForm : Form
         }
         catch (Exception error)
         {
-            if (manual && !IsDisposed) MessageBox.Show(this, "检查更新失败：" + error.Message + "\n请稍后重试。", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Debug.WriteLine("检查更新失败：" + error);
         }
         finally { _checkingUpdates = false; }
     }
