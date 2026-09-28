@@ -1266,6 +1266,30 @@ body .mdv-search-input:focus { outline: 2px solid rgba(65,131,196,0.28); border-
 .mermaid-fullscreen-canvas { transform-origin: 0 0; }
 .mermaid-fullscreen-svg { max-width: none !important; user-select: none; }
 
+/* Compact toolbar inspired by the standalone UI demo; existing editor and file APIs remain intact. */
+.toolbar { height: auto; min-height: 54px; padding: 7px 14px; gap: 6px; background: #fff; border-color: #e6ebf2; flex-wrap: wrap; overflow: visible; }
+.toolbar .brand { font-size: 15px; font-weight: 700; color: #2862c4; white-space: nowrap; margin-right: 10px; }
+.toolbar button, .toolbar details summary { padding: 7px 10px; border-radius: 7px; color: #36465d; white-space: nowrap; font-size: 14px; }
+.toolbar button:hover, .toolbar details summary:hover { background: #edf3ff; }
+.toolbar button.primary, body.dark .toolbar button.primary, body.eye-care .toolbar button.primary { background: #2862c4; color: #fff; }
+.toolbar button.primary:hover { background: #1b50aa; }
+.toolbar details { position: relative; }
+.toolbar details summary { cursor: pointer; list-style: none; }
+.toolbar details summary::-webkit-details-marker { display: none; }
+.toolbar .insert-items { position: absolute; top: 100%; left: 0; z-index: 110; width: 205px; max-height: min(65vh, 440px); overflow-y: auto; padding: 5px; background: #fff; border: 1px solid #dce3ec; border-radius: 9px; box-shadow: 0 12px 30px #26334825; }
+.toolbar .insert-items button { display: block; width: 100%; text-align: left; }
+.toolbar .toolbar-save-status { padding: 6px 9px; font-size: 12px; color: #258052; background: #edf7f1; border-radius: 30px; white-space: nowrap; }
+.toolbar .toolbar-save-status.dirty { color: #a46109; background: #fff2de; }
+.toolbar .preview-mode-button, body.source-mode:not(.split-mode) .toolbar #sourceBtn, body.split-mode .toolbar #splitBtn { background: #e4edff; color: #164fa9; }
+body.source-mode .toolbar .preview-mode-button { background: transparent; color: inherit; }
+body.dark .toolbar .brand { color: #8db9ff; }
+body.dark .toolbar .insert-items { background: #2d2d2d; border-color: #555; }
+body.dark .toolbar details summary, body.dark .toolbar .insert-items button { color: #ddd; }
+body.dark .toolbar .toolbar-save-status { background: #20412d; color: #a7ebbc; }
+body.dark .toolbar .toolbar-save-status.dirty { background: #523b21; color: #ffcf92; }
+body.dark.source-mode:not(.split-mode) .toolbar #sourceBtn, body.dark.split-mode .toolbar #splitBtn, body.dark:not(.source-mode) .toolbar .preview-mode-button { color: #a7caff; background: #304561; }
+body.eye-care .toolbar .insert-items { background: #f0f8f0; border-color: #b8d4b8; }
+@media (max-width: 750px) { .toolbar .brand { display: none; } .toolbar { gap: 3px; } }
 @media print {
   .mdv-search-bar,
   .mermaid-tools,

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Markdown Editor</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%234a90d9'/><path d='M5 22V10h4l3 5 3-5h4v12h-4v-6l-3 4-3-4v6H5zm17-12v12h3l4-5v5h3V10h-3l-4 5v-5h-3z' fill='white'/></svg>">
-<link rel="stylesheet" href="assets/md-viewer.css?v=20260804-6">
+<link rel="stylesheet" href="assets/md-viewer.css?v=20260924-ui">
 </head>
 <body>
 <div class="drag-overlay" id="dragOverlay">📄 拖放 .md 文件到这里</div>
@@ -108,44 +108,33 @@
   </div>
 </div>
 <div class="app">
-  <div class="toolbar">
-    <button onclick="openFile()" data-tip="打开文件 Ctrl+O">📂</button>
-    <button onclick="saveFile()" data-tip="保存 Ctrl+S">💾</button>
-    <button onclick="saveAll()" data-tip="全部保存 Ctrl+Shift+S">💾+</button>
-    <button onclick="showHistory()" data-tip="历史记录">🕘</button>
-    <span class="sep"></span>
-    <button onclick="toggleSidebar()" data-tip="侧边栏">☰</button>
-    <span class="sep"></span>
+  <div class="toolbar" role="toolbar" aria-label="文档工具栏">
+    <span class="brand">▤ MD Viewer</span>
+    <button onclick="openFile()" data-tip="打开文件 Ctrl+O">📂 打开</button>
+    <button id="saveBtn" class="primary" onclick="saveFile()" data-tip="保存 Ctrl+S">💾 保存</button>
+    <details class="insert-menu" id="insertMenu">
+      <summary aria-label="插入内容">＋ 插入 ▾</summary>
+      <div class="insert-items" aria-label="插入内容">
+        <button onclick="insertHeading(1)">标题 H1</button><button onclick="insertHeading(2)">标题 H2</button><button onclick="insertHeading(3)">标题 H3</button><button onclick="insertHeading(4)">标题 H4</button><button onclick="insertHeading(5)">标题 H5</button><button onclick="insertHeading(6)">标题 H6</button>
+        <button onclick="fmt('insertUnorderedList')">无序列表</button><button onclick="fmt('insertOrderedList')">有序列表</button><button onclick="insertChecklist()">待办列表</button>
+        <button onclick="insertCodeBlock()">代码块</button><button onclick="insertLink()">链接</button><button onclick="insertImage()">远程图片</button><button onclick="insertQuote()">引用</button><button onclick="insertTable()">表格</button><button onclick="insertHR()">分割线</button><button onclick="insertMermaid()">Mermaid 图表</button>
+      </div>
+    </details>
     <button onclick="fmt('bold')" data-tip="粗体 Ctrl+B"><b>B</b></button>
     <button onclick="fmt('italic')" data-tip="斜体 Ctrl+I"><i>I</i></button>
-    <button onclick="fmt('underline')" data-tip="下划线"><u>U</u></button>
+    <details class="more-menu" id="moreMenu"><summary aria-label="更多工具">更多 ▾</summary><div class="insert-items">
+      <button onclick="saveAll()">全部保存 Ctrl+Shift+S</button><button onclick="showHistory()">历史记录</button><button onclick="toggleSidebar()">切换侧边栏</button>
+      <button onclick="fmt('underline')"><u>下划线</u></button><button onclick="fmt('strikeThrough')"><s>删除线</s></button>
+      <button onclick="toggleContentWidth()" id="widthBtn" data-tip="内容宽度：标准（点击切换）" aria-label="内容宽度：标准">标准</button>
+      <button onclick="toggleTheme()" id="themeBtn" data-tip="切换主题">🌙 主题</button>
+      <button onclick="chooseDefaultApp()" id="desktopDefaultBtn" data-tip="设为 Markdown 默认应用" style="display:none">默认应用</button>
+    </div></details>
     <button onclick="toggleTextColorPalette()" onmousedown="event.preventDefault()" id="textColorBtn" data-tip="文字颜色" aria-haspopup="menu" aria-expanded="false"><span style="font-weight:600">A</span><span style="font-size:9px">▾</span></button>
-    <button onclick="fmt('strikeThrough')" data-tip="删除线"><s>S</s></button>
-    <button onclick="fmt('insertUnorderedList')" data-tip="无序列表">•</button>
-    <button onclick="fmt('insertOrderedList')" data-tip="有序列表">1.</button>
-    <button onclick="insertChecklist()" data-tip="待办列表">☑</button>
-    <span class="sep"></span>
-    <button onclick="insertHeading(1)" data-tip="标题1">H1</button>
-    <button onclick="insertHeading(2)" data-tip="标题2">H2</button>
-    <button onclick="insertHeading(3)" data-tip="标题3">H3</button>
-    <button onclick="insertHeading(4)" data-tip="标题4">H4</button>
-    <button onclick="insertHeading(5)" data-tip="标题5">H5</button>
-    <button onclick="insertHeading(6)" data-tip="标题6">H6</button>
-    <span class="sep"></span>
-    <button onclick="insertCodeBlock()" data-tip="代码块">&lt;/&gt;</button>
-    <button onclick="insertLink()" data-tip="链接">🔗</button>
-    <button onclick="insertImage()" data-tip="远程图片">🖼</button>
-    <button onclick="insertQuote()" data-tip="引用">❝</button>
-    <button onclick="insertTable()" data-tip="插入表格">▦</button>
-    <button onclick="insertHR()" data-tip="分割线">―</button>
-    <button onclick="insertMermaid()" data-tip="Mermaid图表">📊</button>
-    <span class="sep"></span>
-    <button onclick="toggleSource()" id="sourceBtn" data-tip="源码/预览 Ctrl+/">源码</button>
-    <button onclick="toggleSplit()" id="splitBtn" data-tip="源码与预览分屏">分屏</button>
-    <button onclick="toggleContentWidth()" id="widthBtn" data-tip="内容宽度：标准（点击切换）" aria-label="内容宽度：标准">标准</button>
-    <button onclick="toggleTheme()" id="themeBtn" data-tip="切换主题">🌙</button>
-    <button onclick="chooseDefaultApp()" id="desktopDefaultBtn" data-tip="设为 Markdown 默认应用" style="display:none">默认</button>
     <span class="spacer"></span>
+    <span id="toolbarSaveStatus" class="toolbar-save-status" role="status" aria-live="polite">✓ 已保存</span>
+    <button class="preview-mode-button" onclick="if(document.body.classList.contains('source-mode')) toggleSource()">预览</button>
+    <button onclick="if(document.body.classList.contains('split-mode')) toggleSplit(); if(!document.body.classList.contains('source-mode')) toggleSource()" id="sourceBtn" data-tip="源码/预览 Ctrl+/">源码</button>
+    <button onclick="toggleSplit()" id="splitBtn" data-tip="源码与预览分屏">分屏</button>
   </div>
 
   <div class="main">
@@ -194,13 +183,43 @@
 </div>
 
 <input type="file" id="fileInput" accept=".md,.markdown,.txt" multiple style="display:none">
+<script>
+(function () {
+  const menus = Array.from(document.querySelectorAll('.toolbar details'));
+  document.addEventListener('click', function (event) {
+    menus.forEach(function (menu) {
+      if (event.target.closest('.insert-items') === menu.querySelector('.insert-items') || !menu.contains(event.target)) menu.open = false;
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') menus.forEach(function (menu) { menu.open = false; });
+  });
+  menus.forEach(function (menu) {
+    menu.addEventListener('toggle', function () {
+      if (menu.open) menus.forEach(function (other) { if (other !== menu) other.open = false; });
+    });
+  });
+  const indicator = document.getElementById('modifiedIndicator');
+  const filename = document.getElementById('filename');
+  const badge = document.getElementById('toolbarSaveStatus');
+  function updateBadge() {
+    const message = indicator.textContent.trim();
+    const dirty = filename.classList.contains('modified');
+    badge.textContent = message || (dirty ? '● 未保存' : filename.textContent.trim() === '未打开文件' ? '未打开文件' : '✓ 已保存');
+    badge.classList.toggle('dirty', dirty);
+  }
+  new MutationObserver(updateBadge).observe(indicator, { childList: true, characterData: true, subtree: true });
+  new MutationObserver(updateBadge).observe(filename, { attributes: true, attributeFilter: ['class'], childList: true, characterData: true, subtree: true });
+  updateBadge();
+})();
+</script>
 
 <!-- Mermaid engine (local file, offline capable) -->
 <script src="js/context.js?v=20260805-8"></script>
 <script src="mermaid.min.js?v=20260805-8" onload="_mermaidScriptLoaded=true;" onerror="_mermaidScriptError=true;"></script>
 <script src="js/parser.js?v=20260805-8"></script>
 <script src="js/history.js?v=20260805-8"></script>
-<script src="js/editor.js?v=20260805-8"></script>
+<script src="js/editor.js?v=20260924-ui"></script>
 <script src="js/files.js?v=20260805-8"></script>
 <script src="js/tables.js?v=20260805-8"></script>
 <script src="js/clipboard.js?v=20260805-8"></script>
