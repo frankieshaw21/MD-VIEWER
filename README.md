@@ -8,7 +8,7 @@
 
 [![MD Viewer 界面方案演示预览](demo/ui-concept.png)](demo/ui-concept.html)
 
-这是**独立的界面方案演示，并非当前正式应用界面**。要体验交互，请下载仓库后用浏览器打开 [`demo/ui-concept.html`](demo/ui-concept.html)；GitHub 的文件预览不会运行 HTML。Demo 不会读取或保存真实文件。
+这是**独立的界面方案演示**；正式应用已采用其紧凑工具栏、插入菜单与保存状态设计，同时保留完整的文件、编辑和分屏功能。要体验演示交互，请下载仓库后用浏览器打开 [`demo/ui-concept.html`](demo/ui-concept.html)；GitHub 的文件预览不会运行 HTML。Demo 不会读取或保存真实文件。
 
 ## 主要功能
 
@@ -56,9 +56,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\md-viewer-server.ps1
 
 ## 界面导览
 
-实际界面以 [`md-viewer.html`](md-viewer.html) 为准：顶部工具栏提供打开、保存、全部保存、历史记录及格式/插入操作；右侧可切换“源码”“分屏”、内容宽度和主题。左侧侧栏可在“文件”和“大纲”之间切换，底部状态栏提供当前文件重新加载入口。选中表格单元格后右键可打开行列、合并拆分及背景色菜单；点击 Mermaid 图表可使用缩放、全屏与导出工具。
+实际界面以 [`md-viewer.html`](md-viewer.html) 为准：顶部工具栏直接提供打开、保存、粗体、斜体及预览/源码/分屏；“插入”菜单提供标题、列表、表格、代码块及图表等；“更多”菜单包含全部保存、历史记录、侧栏、宽度和主题。左侧侧栏可在“文件”和“大纲”之间切换，底部状态栏提供当前文件重新加载入口。选中表格单元格后右键可打开行列、合并拆分及背景色菜单；点击 Mermaid 图表可使用缩放、全屏与导出工具。
 
-[`demo/ui-concept.html`](demo/ui-concept.html) 是可单独打开的**界面方案演示**，用于评估工具栏与交互；它不读取或保存真实文件，也不是当前正式界面。不要在 Demo 中编辑重要内容。
+[`demo/ui-concept.html`](demo/ui-concept.html) 是可单独打开的**界面方案演示**，用于评估工具栏与交互；它不读取或保存真实文件，仅供独立体验，不等同于完整应用。不要在 Demo 中编辑重要内容。
 
 ## 常用操作
 

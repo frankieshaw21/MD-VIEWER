@@ -67,7 +67,7 @@
       const splitButton = document.getElementById('splitBtn');
       if (sourceButton) {
         sourceButton.classList.toggle('active', normalized !== 'preview');
-        sourceButton.textContent = normalized === 'preview' ? '源码' : '预览';
+        sourceButton.textContent = '源码';
       }
       if (splitButton) splitButton.classList.toggle('active', normalized === 'split');
       if (editorEl) editorEl.setAttribute('contenteditable', normalized === 'preview' ? 'true' : 'false');

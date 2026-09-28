@@ -1,6 +1,6 @@
 # MD Viewer 桌面版
 
-这是基于 WebView2 的 Windows 桌面外壳，复用根目录中的 Viewer 前端。主界面操作与网页版一致：顶部工具栏可打开、保存、查找、切换源码/预览与分屏，侧栏可查看文件及大纲。完整界面说明和快捷键见 [根目录 README](../README.md#界面导览)。仓库中的 [`demo/ui-concept.html`](../demo/ui-concept.html) 仅为独立界面方案演示，不是桌面版界面。
+这是基于 WebView2 的 Windows 桌面外壳，复用根目录中的 Viewer 前端。主界面操作与网页版一致：顶部工具栏可打开、保存、查找、切换源码/预览与分屏，侧栏可查看文件及大纲。完整界面说明和快捷键见 [根目录 README](../README.md#界面导览)。仓库中的 [`demo/ui-concept.html`](../demo/ui-concept.html) 仅为独立交互演示；桌面版已采用其中的紧凑工具栏设计，并保留完整编辑功能。
 
 ## 普通用户：一键安装
 
