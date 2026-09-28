@@ -6,6 +6,15 @@
 
 暂无。
 
+## [0.1.4] - 2026-09-28
+
+### 界面更新
+- 正式应用采用 UI Demo 的紧凑工具栏：打开、保存和常用格式操作直接可见，其他操作收纳至“插入”“更多”菜单。
+- 顶部增加保存状态，并提供预览、源码及分屏切换入口；原有文件、编辑功能保持可用。
+
+### 验证
+- Windows 桌面版发布构建通过；已验证 WebView2 启动、文件打开、编辑保存及单实例多文件打开。
+
 ## [0.1.3] - 2026-09-24
 
 ### 新增
@@ -37,6 +46,7 @@
 ### 说明
 - 外部文件修改的定时发现可能略有延迟；手动打开、重载和保存功能不受影响。
 
+[0.1.4]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.4
 [0.1.3]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.3
 [0.1.2]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.2
 [0.1.1]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.1
