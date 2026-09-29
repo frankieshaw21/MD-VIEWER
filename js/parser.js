@@ -362,7 +362,9 @@ function parseList(lines, start, baseIndent) {
     i++;
   }
 
-  let html = '<' + tag + (isTask ? ' class="task-list"' : '') + '>';
+  const firstNumber = ordered ? Number(lines[start].match(/^\s*(\d+)\./)[1]) : 1;
+  let html = '<' + tag + (isTask ? ' class="task-list"' : '') +
+    (ordered && firstNumber !== 1 ? ' start="' + firstNumber + '"' : '') + '>';
   items.forEach(it => { html += '<li>' + it.content + '</li>'; });
   html += '</' + tag + '>';
   return { html: html, next: i };
@@ -443,7 +445,7 @@ function domToMd(node) {
     else if (tag === 'ul' || tag === 'ol') {
       child.querySelectorAll(':scope > li').forEach((li, idx) => {
         const checkbox = li.querySelector(':scope > input[type="checkbox"]');
-        let prefix = tag === 'ol' ? (idx + 1) + '. ' : '- ';
+        let prefix = tag === 'ol' ? (Number(child.getAttribute('start') || 1) + idx) + '. ' : '- ';
         const content = li.cloneNode(true);
         const clonedCheckbox = content.querySelector(':scope > input[type="checkbox"]');
         if (checkbox) {

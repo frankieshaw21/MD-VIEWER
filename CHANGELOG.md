@@ -6,6 +6,13 @@
 
 暂无。
 
+## [0.1.5] - 2026-09-29
+
+### 修复
+- 修复代码块分隔的有序列表在预览中重新从 1 编号的问题，并保留列表起始序号。
+- 全选源码复制时，纯文本剪贴板保留原始 Markdown，而非转换后的预览文字。
+- 桌面发布保留 ReadyToRun，关闭导致本机 crossgen2 崩溃的复合编译。
+
 ## [0.1.4] - 2026-09-28
 
 ### 界面更新
@@ -46,6 +53,7 @@
 ### 说明
 - 外部文件修改的定时发现可能略有延迟；手动打开、重载和保存功能不受影响。
 
+[0.1.5]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.5
 [0.1.4]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.4
 [0.1.3]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.3
 [0.1.2]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.2

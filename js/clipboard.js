@@ -391,7 +391,11 @@
       const sourceTable = getSelectedSourceTable();
       if (sourceTable) return setFeishuTableClipboard(event, sourceTable, 'source');
       const sourceDocument = getSelectedSourceDocument();
-      if (sourceDocument) return setFeishuDocumentClipboard(event, sourceDocument, 'source');
+      if (sourceDocument) {
+        if (!setFeishuDocumentClipboard(event, sourceDocument, 'source')) return false;
+        event.clipboardData.setData('text/plain', sourceEditor.value.slice(sourceEditor.selectionStart, sourceEditor.selectionEnd));
+        return true;
+      }
       if (isSourceMode()) return false;
 
       const selectedCells = typeof tables.getSelectedCells === 'function' ? tables.getSelectedCells() : [];
