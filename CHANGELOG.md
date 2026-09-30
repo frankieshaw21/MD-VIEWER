@@ -6,6 +6,17 @@
 
 暂无。
 
+## [0.1.8] - 2026-09-30
+
+### 新增
+- 软件更新确认后可后台下载安装包，并显示下载进度，下载期间可继续编辑。
+- 下载完成后校验 SHA-256；用户点击安装时检查未保存文档，再启动安装程序。
+- 启动时发现新版提示使用菜单后台下载，不再跳转网页。
+
+### 验证
+- 已真实下载 v0.1.7 安装包并通过 SHA-256 校验；桌面构建和 JS 检查通过。
+- 未实际执行安装升级；Windows 管理员授权和安装程序界面仍需用户确认。
+
 ## [0.1.7] - 2026-09-30
 
 ### 修复与优化
@@ -70,6 +81,7 @@
 ### 说明
 - 外部文件修改的定时发现可能略有延迟；手动打开、重载和保存功能不受影响。
 
+[0.1.8]: https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.8
 [0.1.7]: https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.7
 [0.1.6]: https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.6
 [0.1.5]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.5

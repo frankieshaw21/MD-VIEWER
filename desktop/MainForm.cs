@@ -17,6 +17,8 @@ internal sealed class MainForm : Form
     private bool _allowClose;
     private bool _closeCheckInProgress;
     private bool _checkingUpdates;
+    private string? _downloadedUpdatePath;
+    private string? _downloadedUpdateVersion;
 
     public MainForm(string[] initialPaths, SingleInstanceCoordinator instance)
     {
@@ -51,10 +53,9 @@ internal sealed class MainForm : Form
             {
                 return;
             }
-            if (MessageBox.Show(this,
-                $"发现新版本 {update.Value.Version}（当前 {UpdateChecker.CurrentVersion}）。\n\n是否前往 GitHub 发布页面查看更新说明并下载安装包？\n选择“否”将继续使用当前版本。",
-                "MD Viewer 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                OpenExternal(update.Value.Url);
+            MessageBox.Show(this,
+                $"发现新版本 {update.Value.Version}（当前 {UpdateChecker.CurrentVersion}）。\n\n可在“更多 → 检查软件更新”中后台下载，完成后再安装。",
+                "MD Viewer 更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception error)
         {
@@ -190,6 +191,24 @@ internal sealed class MainForm : Form
                 case "check-updates":
                     var latestUpdate = await UpdateChecker.GetLatestAsync();
                     Reply(id, new { version = latestUpdate?.Version, url = latestUpdate?.Url });
+                    break;
+                case "download-update":
+                    var updateVersion = GetString(root, "version");
+                    var progress = new Progress<int>(percent => Post(new { kind = "update-download-progress", percent }));
+                    _downloadedUpdatePath = await UpdateChecker.DownloadInstallerAsync(updateVersion, progress);
+                    _downloadedUpdateVersion = updateVersion;
+                    Reply(id, new { version = updateVersion });
+                    break;
+                case "install-update":
+                    if (string.IsNullOrWhiteSpace(_downloadedUpdatePath) || !File.Exists(_downloadedUpdatePath))
+                        throw new InvalidOperationException("更新包尚未下载完成，请重新下载。");
+                    var unsaved = await _webView.CoreWebView2.ExecuteScriptAsync(
+                        "(function(){var f=window.MDViewer&&MDViewer.app&&MDViewer.app.getPort('files');return Boolean(f&&f.hasUnsavedChanges&&f.hasUnsavedChanges());})()");
+                    if (unsaved == "true") throw new InvalidOperationException("请先保存或放弃未保存的文档，再安装更新。");
+                    Process.Start(new ProcessStartInfo(_downloadedUpdatePath, "/CLOSEAPPLICATIONS") { UseShellExecute = true });
+                    _allowClose = true;
+                    BeginInvoke(new Action(Close));
+                    Reply(id, new { version = _downloadedUpdateVersion });
                     break;
                 case "choose-default":
                     FileAssociations.OpenDefaultApps();
