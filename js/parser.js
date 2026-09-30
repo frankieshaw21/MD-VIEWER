@@ -452,7 +452,15 @@ function domToMd(node) {
           prefix = '- [' + (checkbox.checked ? 'x' : ' ') + '] ';
           if (clonedCheckbox) clonedCheckbox.remove();
         }
-        md += prefix + domToMd(content).trim() + '\n';
+        const nestedLists = Array.from(content.children).filter(element => /^(UL|OL)$/.test(element.tagName));
+        nestedLists.forEach(element => element.remove());
+        const indent = ' '.repeat(prefix.length);
+        md += prefix + domToMd(content).trim().replace(/\n/g, '\n' + indent) + '\n';
+        nestedLists.forEach(list => {
+          const wrapper = document.createElement('div');
+          wrapper.appendChild(list);
+          md += domToMd(wrapper).trim().split('\n').map(line => indent + line).join('\n') + '\n';
+        });
       });
       md += '\n';
     }

@@ -6,6 +6,17 @@
 
 暂无。
 
+## [0.1.7] - 2026-09-30
+
+### 修复与优化
+- 修复源码高亮层与编辑框字体、换行宽度不一致造成的选区错位。
+- 修复嵌套列表转换为 Markdown 时子列表结构丢失的问题。
+- 超过 250,000 字符的文档使用原生纯文本源码模式，暂停语法高亮、行号及当前行覆盖层，减少切换卡顿；小文档恢复高亮。
+
+### 验证
+- 最新桌面 WebView2 中验证嵌套列表转换及预览编辑保存；百万字符样本切源码约从 6.46 秒降至 1.38 秒，仍有秒级延迟。
+- 桌面发布构建与 JS 检查通过；未做干净环境安装验收。
+
 ## [0.1.6] - 2026-09-29
 
 ### 修复
@@ -59,6 +70,7 @@
 ### 说明
 - 外部文件修改的定时发现可能略有延迟；手动打开、重载和保存功能不受影响。
 
+[0.1.7]: https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.7
 [0.1.6]: https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.6
 [0.1.5]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.5
 [0.1.4]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.4

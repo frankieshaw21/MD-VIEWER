@@ -1175,6 +1175,15 @@ body.dark .source-token-code-block { color: #e58f80; }
 body.eye-care .source-token-heading-text,
 body.eye-care .source-token-link-text { color: #397b4a; }
 
+/* Large documents use the native text layer; no duplicate full-document DOM. */
+.source-editor-large .source-editor-highlight,
+.source-editor-large .source-editor-current-line,
+.source-editor-large .source-editor-gutter { display: none; }
+.source-editor-large .source-editor-input {
+  color: var(--panel-text) !important;
+  -webkit-text-fill-color: currentColor;
+}
+
 /* Go-to-line popover */
 .source-editor-go-to-line[hidden] { display: none; }
 .source-editor-go-to-line {

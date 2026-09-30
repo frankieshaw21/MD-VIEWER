@@ -1,0 +1,222 @@
+{
+  "commit": "bee64c1",
+  "browser": [
+    {
+      "test": "startup",
+      "result": "PASS"
+    },
+    {
+      "test": "open/render",
+      "result": "PASS"
+    },
+    {
+      "test": "source/split/preview",
+      "result": "PASS"
+    },
+    {
+      "test": "multiple tabs",
+      "result": "PASS"
+    },
+    {
+      "test": "source edit/unsaved close protection",
+      "result": "PASS"
+    },
+    {
+      "test": "source copy exact",
+      "result": "PASS"
+    },
+    {
+      "test": "search/replace",
+      "result": "PASS"
+    },
+    {
+      "test": "themes",
+      "result": "PASS"
+    },
+    {
+      "test": "source overlay geometry",
+      "result": "PASS"
+    },
+    {
+      "test": "parser roundtrip nested list",
+      "result": "FAIL",
+      "detail": "Error: nested list lost: 3. parent1. child\n4. next\n    at assert (file:///C:/Users/frankie.xiao/Desktop/MD-VIEWER/.self-test-run.js:2:306)\n    at file:///C:/Users/frankie.xiao/Desktop/MD-VIEWER/.self-test-run.js:15:199\n    at test (file:///C:/Users/frankie.xiao/Desktop/MD-VIEWER/.self-test-run.js:2:389)\n    at file:///C:/Users/frankie.xiao/Desktop/MD-VIEWER/.self-test-run.js:15:7"
+    },
+    {
+      "test": "performance",
+      "result": "PASS",
+      "detail": [
+        {
+          "chars": 5900,
+          "renderMs": 12.5,
+          "layoutMs": 0,
+          "sourceSwitchMs": 3.1,
+          "previewSwitchMs": 5.2
+        },
+        {
+          "chars": 59000,
+          "renderMs": 93.1,
+          "layoutMs": 0,
+          "sourceSwitchMs": 10.2,
+          "previewSwitchMs": 40.9
+        },
+        {
+          "chars": 295000,
+          "renderMs": 504.4,
+          "layoutMs": 0,
+          "sourceSwitchMs": 36.3,
+          "previewSwitchMs": 149.4
+        }
+      ]
+    }
+  ],
+  "desktopBasic": [
+    {
+      "name": "native launch/file argument",
+      "result": "PASS"
+    },
+    {
+      "name": "source edit/save native disk",
+      "result": "PASS"
+    },
+    {
+      "name": "external write/reload feedback",
+      "result": "PASS"
+    },
+    {
+      "name": "reload cancellation preserves changes",
+      "result": "PASS"
+    },
+    {
+      "name": "native read missing path failure",
+      "result": "PASS"
+    },
+    {
+      "name": "software update live feedback",
+      "result": "PASS",
+      "detail": {
+        "status": "已是最新版本",
+        "ms": 1074
+      }
+    },
+    {
+      "name": "discard temporary edits",
+      "result": "PASS"
+    }
+  ],
+  "desktopExtended": [
+    {
+      "name": "single instance forwarding",
+      "result": "PASS"
+    },
+    {
+      "name": "history persisted snapshot",
+      "result": "PASS"
+    },
+    {
+      "name": "preview edit/save/reopen",
+      "result": "PASS"
+    },
+    {
+      "name": "Mermaid real SVG render",
+      "result": "PASS",
+      "detail": {
+        "ms": 103
+      }
+    },
+    {
+      "name": "native performance",
+      "result": "PASS",
+      "detail": [
+        {
+          "chars": 59000,
+          "renderMs": 192,
+          "sourceMs": 413,
+          "previewMs": 211
+        },
+        {
+          "chars": 295000,
+          "renderMs": 558,
+          "sourceMs": 1787,
+          "previewMs": 837
+        },
+        {
+          "chars": 1003000,
+          "renderMs": 1946,
+          "sourceMs": 6462,
+          "previewMs": 3783
+        }
+      ]
+    },
+    {
+      "name": "restore temporary disk contents",
+      "result": "PASS"
+    }
+  ],
+  "idleSamples": [
+    {
+      "Index": 0,
+      "CpuPercent": null,
+      "WorkingSetMB": 427.6,
+      "PrivateMB": 205.6,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 1,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.4,
+      "PrivateMB": 205.3,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 2,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.5,
+      "PrivateMB": 205.5,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 3,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.5,
+      "PrivateMB": 205.5,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 4,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.6,
+      "PrivateMB": 205.6,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 5,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.6,
+      "PrivateMB": 205.6,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 6,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.6,
+      "PrivateMB": 205.6,
+      "Processes": 7,
+      "Responding": true
+    },
+    {
+      "Index": 7,
+      "CpuPercent": 0,
+      "WorkingSetMB": 427.5,
+      "PrivateMB": 205.5,
+      "Processes": 7,
+      "Responding": true
+    }
+  ]
+}

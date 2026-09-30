@@ -277,6 +277,7 @@
     }
 
     function syncScroll() {
+      if (shell.classList.contains('source-editor-large')) return;
       const scrollTop = sourceEditor.scrollTop;
       const scrollLeft = sourceEditor.scrollLeft;
       // The textarea scrollbar consumes layout width; the overlay has none.
@@ -290,6 +291,7 @@
     }
 
     function syncCurrentLine(forceMeasure) {
+      if (shell.classList.contains('source-editor-large')) return;
       const number = currentLineNumber();
       const fontSize = numericStyle('fontSize', 16);
       const lineHeight = numericStyle('lineHeight', fontSize * 1.5);
@@ -310,6 +312,16 @@
     function refresh() {
       if (!started) return start();
       currentLineMeasurement = null;
+      // Keep native editing responsive rather than creating tens of thousands
+      // of highlighted spans and measuring an entire document on every input.
+      const large = sourceEditor.value.length > 250000;
+      shell.classList.toggle('source-editor-large', large);
+      if (large) {
+        highlightContent.textContent = '';
+        lineNumbers.textContent = '';
+        goToLineInput.max = String(lineCount());
+        return api;
+      }
       const count = lineCount();
       highlightContent.innerHTML = renderMarkdown(sourceEditor.value);
       lineNumbers.textContent = Array.from({ length: count }, function(_, index) {

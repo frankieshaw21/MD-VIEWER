@@ -1,0 +1,59 @@
+{
+  "id": 1,
+  "result": {
+    "result": {
+      "type": "object",
+      "value": [
+        {
+          "test": "list roundtrip",
+          "input": "3. parent\n   1. child\n4. next",
+          "result": "PASS"
+        },
+        {
+          "test": "list roundtrip",
+          "input": "- parent\n  - child\n    - grandchild\n- next",
+          "result": "PASS"
+        },
+        {
+          "test": "list roundtrip",
+          "input": "10. parent\n    - child\n11. next",
+          "result": "PASS"
+        },
+        {
+          "test": "list roundtrip",
+          "input": "- [x] parent\n      - [ ] child",
+          "result": "PASS"
+        },
+        {
+          "test": "preview edit native save nested list",
+          "result": "PASS"
+        },
+        {
+          "test": "performance",
+          "chars": 59000,
+          "renderMs": 136,
+          "sourceMs": 319,
+          "previewMs": 162
+        },
+        {
+          "test": "performance",
+          "chars": 295000,
+          "renderMs": 512,
+          "sourceMs": 530,
+          "previewMs": 663
+        },
+        {
+          "test": "performance",
+          "chars": 1003000,
+          "renderMs": 1602,
+          "sourceMs": 1378,
+          "previewMs": 2106
+        },
+        {
+          "test": "small document highlight restored",
+          "result": "PASS"
+        }
+      ]
+    }
+  }
+}
