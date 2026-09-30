@@ -25,6 +25,19 @@
     let goToLineClose = null;
     let fence = null;
     let currentLineMeasurement = null;
+    let refreshTimer = null;
+    let composing = false;
+
+    function cancelRefresh() {
+      if (refreshTimer) { win.clearTimeout(refreshTimer); refreshTimer = null; }
+    }
+    function scheduleRefresh() {
+      cancelRefresh();
+      // Display native text while the overlay is stale, including IME input.
+      shell.classList.add('source-editor-pending');
+      if (composing) return;
+      refreshTimer = win.setTimeout(refresh, 120);
+    }
 
     function escapeHtml(value) {
       return String(value)
@@ -277,7 +290,7 @@
     }
 
     function syncScroll() {
-      if (shell.classList.contains('source-editor-large')) return;
+      if (shell.classList.contains('source-editor-large') || shell.classList.contains('source-editor-pending')) return;
       const scrollTop = sourceEditor.scrollTop;
       const scrollLeft = sourceEditor.scrollLeft;
       // The textarea scrollbar consumes layout width; the overlay has none.
@@ -291,7 +304,7 @@
     }
 
     function syncCurrentLine(forceMeasure) {
-      if (shell.classList.contains('source-editor-large')) return;
+      if (shell.classList.contains('source-editor-large') || shell.classList.contains('source-editor-pending')) return;
       const number = currentLineNumber();
       const fontSize = numericStyle('fontSize', 16);
       const lineHeight = numericStyle('lineHeight', fontSize * 1.5);
@@ -311,6 +324,10 @@
 
     function refresh() {
       if (!started) return start();
+      cancelRefresh();
+      if (composing) return api;
+      shell.classList.remove('source-editor-pending');
+      if (context.state.get('viewMode') === 'preview') return api;
       currentLineMeasurement = null;
       // Keep native editing responsive rather than creating tens of thousands
       // of highlighted spans and measuring an entire document on every input.
@@ -454,7 +471,9 @@
 
     function bind() {
       sourceEditor.addEventListener('scroll', syncScroll);
-      sourceEditor.addEventListener('input', refresh);
+      sourceEditor.addEventListener('compositionstart', function() { composing = true; scheduleRefresh(); });
+      sourceEditor.addEventListener('compositionend', function() { composing = false; scheduleRefresh(); });
+      sourceEditor.addEventListener('input', scheduleRefresh);
       ['click', 'keyup', 'select'].forEach(function(eventName) {
         sourceEditor.addEventListener(eventName, function() { syncCurrentLine(true); });
       });

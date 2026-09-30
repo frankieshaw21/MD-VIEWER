@@ -15,6 +15,10 @@
     let observerPaused = false;
     let observerTimer = null;
     let outlineTimer = null;
+    let sourceUiTimer = null;
+    let previewContent = null;
+    let previewFile = null;
+    let activeOutlineEntry = null;
     let splitRenderTimer = null;
     let splitScrollFrame = null;
     let splitIgnoredElement = null;
@@ -74,7 +78,24 @@
       return normalized;
     }
     function isPreviewDirty() { return Boolean(context.state.get('previewDirty')); }
-    function setPreviewDirty(value) { return setState('previewDirty', Boolean(value)); }
+    function setPreviewDirty(value) {
+      if (value) previewContent = null;
+      return setState('previewDirty', Boolean(value));
+    }
+    function canReusePreview(content) {
+      return previewContent !== null && previewFile === currentFile() && previewContent === content;
+    }
+    function cancelSourceUi() {
+      if (sourceUiTimer) { clearTimeout(sourceUiTimer); sourceUiTimer = null; }
+    }
+    function scheduleSourceUi() {
+      cancelSourceUi();
+      sourceUiTimer = setTimeout(function() {
+        sourceUiTimer = null;
+        updateCounts();
+        updateOutline();
+      }, 120);
+    }
     function updateCounts() {
       const sourceMode = isSourceMode();
       const text = sourceMode ? sourceEditor.value : (editorEl.innerText || '');
@@ -506,6 +527,8 @@
     }
 
     function loadMarkdown(markdown, meta) {
+      previewContent = String(markdown || '');
+      previewFile = currentFile();
       cancelFlush();
       setPreviewDirty(false);
       savedColorRange = null;
@@ -538,6 +561,8 @@
 
     function replaceDocument(content, meta) {
       const value = String(content || '');
+      cancelSourceUi();
+      previewContent = null;
       cancelSplitRender();
       cancelFlush();
       setPreviewDirty(false);
@@ -557,6 +582,8 @@
     }
 
     function showEmpty() {
+      cancelSourceUi();
+      previewContent = null;
       cancelSplitRender();
       cancelFlush();
       setPreviewDirty(false);
@@ -624,6 +651,7 @@
       const ui = context.getPort('ui');
       if (ui) ui.hideTextColorPalette();
       cancelSplitRender();
+      cancelSourceUi();
 
       let content;
       let scrollRatio;
@@ -633,7 +661,9 @@
         scrollRatio = getScrollRatio(previousMode === 'preview' ? editorWrapper : sourceEditor);
         applyViewMode('preview');
         sourceEditor.blur();
-        loadMarkdown(content || '', { source: 'mode-switch', from: previousMode, to: normalized });
+        if (!canReusePreview(content || '')) {
+          loadMarkdown(content || '', { source: 'mode-switch', from: previousMode, to: normalized });
+        }
         restoreScrollRatio(editorWrapper, scrollRatio);
       } else {
         scrollRatio = getScrollRatio(previousMode === 'source' ? sourceEditor : editorWrapper);
@@ -644,7 +674,9 @@
         sourceEditor.value = content || '';
         applyViewMode(normalized);
         if (normalized === 'split') {
-          loadMarkdown(sourceEditor.value, { source: 'mode-switch', from: previousMode, to: normalized });
+          if (!canReusePreview(sourceEditor.value)) {
+            loadMarkdown(sourceEditor.value, { source: 'mode-switch', from: previousMode, to: normalized });
+          }
           restoreScrollRatio(editorWrapper, scrollRatio);
         } else editorWrapper.scrollTop = 0;
         const position = sourcePositionAtRatio(sourceEditor.value, scrollRatio);
@@ -885,11 +917,13 @@
       return parser.extractHeadings(markdown);
     }
 
+    function getVisiblePreviewHeadings() {
+      return Array.from(editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+        .filter(function(node) { return !node.closest('details:not([open])'); });
+    }
     function getOutline() {
       if (isSourceMode()) return getSourceHeadings(sourceEditor.value);
-      return Array.from(editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6'))
-        .filter(function(node) { return !node.closest('details:not([open])'); })
-        .map(function(node) {
+      return getVisiblePreviewHeadings().map(function(node) {
           return { level: Number(node.tagName.slice(1)), text: node.textContent.trim(), node: node };
         });
     }
@@ -897,14 +931,17 @@
     function updateOutline() {
       const headings = getOutline();
       if (!outlineList) return headings;
-      outlineList.replaceChildren();
+      if (outlineTimer) { clearTimeout(outlineTimer); outlineTimer = null; }
+      activeOutlineEntry = null;
+      const fragment = document.createDocumentFragment();
       headings.forEach(function(item, index) {
         const entry = document.createElement('li');
         entry.className = 'h' + item.level;
         entry.dataset.headingIndex = index;
         entry.textContent = item.text;
-        outlineList.appendChild(entry);
+        fragment.appendChild(entry);
       });
+      outlineList.replaceChildren(fragment);
       return headings;
     }
 
@@ -941,12 +978,13 @@
       if (outlineList) Array.from(outlineList.children).forEach(function(item, itemIndex) {
         item.classList.toggle('active-heading', itemIndex === index);
       });
+      activeOutlineEntry = outlineList && outlineList.children[index];
       return true;
     }
 
     function updateActiveHeading() {
       if (isSourceOnlyMode() || !outlineList || !editorWrapper) return;
-      const headings = editorEl.querySelectorAll('h1,h2,h3,h4,h5,h6');
+      const headings = getVisiblePreviewHeadings();
       const items = outlineList.children;
       if (!headings.length || !items.length) return;
       let active = 0;
@@ -956,8 +994,12 @@
         if (headings[index].getBoundingClientRect().top > threshold) break;
         active = index;
       }
-      for (let index = 0; index < items.length; index++) {
-        items[index].classList.toggle('active-heading', index === active);
+      const nextEntry = items[active];
+      if (!nextEntry) return;
+      if (nextEntry !== activeOutlineEntry) {
+        if (activeOutlineEntry) activeOutlineEntry.classList.remove('active-heading');
+        nextEntry.classList.add('active-heading');
+        activeOutlineEntry = nextEntry;
       }
     }
 
@@ -976,7 +1018,7 @@
       document.addEventListener('keydown', function(event) {
         if (!handleMermaidUndoRedo(event)) deleteSelectedMermaid(event);
       });
-      sourceEditor.addEventListener('compositionstart', function() { composing = true; });
+      sourceEditor.addEventListener('compositionstart', function() { composing = true; cancelSourceUi(); });
       sourceEditor.addEventListener('compositionend', function() { composing = false; sourceChanged(); });
       sourceEditor.addEventListener('input', function() { if (!composing) sourceChanged(); });
       sourceEditor.addEventListener('scroll', function() { scheduleSplitScroll(sourceEditor, editorWrapper); });
@@ -1027,8 +1069,7 @@
           restoreScrollRatio(editorWrapper, previewRatio);
         }, 180);
       }
-      updateCounts();
-      updateOutline();
+      scheduleSourceUi();
       history.scheduleHistorySnapshot();
       emit('document:changed', { content: content, mode: isSplitMode() ? 'split' : 'source', composing: composing });
     }

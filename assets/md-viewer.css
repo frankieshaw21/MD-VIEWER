@@ -1175,6 +1175,14 @@ body.dark .source-token-code-block { color: #e58f80; }
 body.eye-care .source-token-heading-text,
 body.eye-care .source-token-link-text { color: #397b4a; }
 
+/* Native text remains visible while debounced highlighting is pending. */
+.source-editor-pending .source-editor-highlight,
+.source-editor-pending .source-editor-current-line,
+.source-editor-pending .source-editor-gutter { visibility: hidden; }
+.source-editor-pending .source-editor-input {
+  color: var(--panel-text) !important;
+  -webkit-text-fill-color: currentColor;
+}
 /* Large documents use the native text layer; no duplicate full-document DOM. */
 .source-editor-large .source-editor-highlight,
 .source-editor-large .source-editor-current-line,
