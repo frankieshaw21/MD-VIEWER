@@ -187,6 +187,10 @@ internal sealed class MainForm : Form
                     Grant(new[] { resolvedLink.Path });
                     Reply(id, new { path = resolvedLink.Path, fragment = resolvedLink.Fragment });
                     break;
+                case "check-updates":
+                    var latestUpdate = await UpdateChecker.GetLatestAsync();
+                    Reply(id, new { version = latestUpdate?.Version, url = latestUpdate?.Url });
+                    break;
                 case "choose-default":
                     FileAssociations.OpenDefaultApps();
                     Reply(id, true);

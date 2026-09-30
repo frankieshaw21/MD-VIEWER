@@ -357,6 +357,42 @@
       return summary;
     }
 
+    let reloadBusy = false;
+    let reloadStatusTimer = null;
+    async function reloadFileWithFeedback() {
+      if (reloadBusy) return false;
+      const button = document.getElementById('reloadFileButton');
+      reloadBusy = true;
+      if (reloadStatusTimer) clearTimeout(reloadStatusTimer);
+      if (button) {
+        button.disabled = true;
+        button.setAttribute('aria-busy', 'true');
+        button.textContent = '↻ 更新中…';
+      }
+      let status = '未更新';
+      try {
+        const result = await reloadFile();
+        status = result ? '✓ 已更新' : '未更新';
+        return result;
+      } catch (error) {
+        status = '⚠ 更新失败';
+        console.error('重新加载文件失败：', error);
+        alert('重新加载文件失败：' + (error && error.message ? error.message : String(error)));
+        return false;
+      } finally {
+        reloadBusy = false;
+        if (button) {
+          button.disabled = false;
+          button.removeAttribute('aria-busy');
+          button.textContent = status;
+          reloadStatusTimer = setTimeout(function() {
+            button.textContent = '↻ 更新';
+            reloadStatusTimer = null;
+          }, 3000);
+        }
+      }
+    }
+
     async function reloadFile() {
       const file = getActiveFile();
       if (!file) { alert('请先打开 Markdown 文件'); return false; }
@@ -365,11 +401,17 @@
       await history.createHistorySnapshot(file, '重新加载前', local);
       let content, diskFile;
       if (file.desktopPath && desktop.available) {
-        const data = await desktop.readFile(file.desktopPath);
+        const data = await Promise.race([
+          desktop.readFile(file.desktopPath),
+          new Promise(function(resolve, reject) {
+            setTimeout(function() { reject(new Error('读取文件超时，请重试')); }, 20000);
+          })
+        ]);
         content = data.content;
         diskFile = { lastModified: data.lastModified, size: data.size };
       } else if (file.serverPath) {
-        const response = await fetch('/api/read?file=' + encodeURIComponent(file.serverPath));
+        const response = await fetch('/api/read?file=' + encodeURIComponent(file.serverPath),
+          { signal: AbortSignal.timeout(20000) });
         if (!response.ok) throw new Error('读取文件失败（HTTP ' + response.status + '）');
         content = await response.text();
       } else if (file.handle) {
@@ -380,17 +422,23 @@
       } else {
         if (global.showOpenFilePicker) return relinkCurrentFile(true);
         const input = document.createElement('input'); input.type = 'file'; input.accept = '.md,.markdown,.txt';
-        input.onchange = async function(event) {
-          const selected = event.target.files[0]; if (!selected) return;
-          const nextContent = await readBlobText(selected);
-          file.name = selected.name; file.content = file.savedContent = nextContent;
-          file.lastModified = selected.lastModified; file.fileSize = selected.size;
-          setState('modified', false);
-          editor.replaceDocument(nextContent, { source: 'reload' });
-          emit('file:activated', { file: file, index: activeFileIndex, modified: false });
-          markSessionDirty(); publishList();
-        };
-        input.click(); return true;
+        return new Promise(function(resolve, reject) {
+          input.oncancel = function() { resolve(false); };
+          input.onchange = async function(event) {
+            const selected = event.target.files[0];
+            if (!selected) { resolve(false); return; }
+            try {
+              const nextContent = await readBlobText(selected);
+              file.name = selected.name; file.content = file.savedContent = nextContent;
+              file.lastModified = selected.lastModified; file.fileSize = selected.size;
+              setState('modified', false);
+              editor.replaceDocument(nextContent, { source: 'reload' });
+              emit('file:activated', { file: file, index: activeFileIndex, modified: false });
+              markSessionDirty(); publishList(); resolve(true);
+            } catch (error) { reject(error); }
+          };
+          input.click();
+        });
       }
       file.content = file.savedContent = content;
       if (diskFile) { file.lastModified = diskFile.lastModified; file.fileSize = diskFile.size; }
@@ -779,7 +827,7 @@
     const api = Object.freeze({
       start: start, openFile: openFile, addFile: addFile, addFiles: addFiles,
       openDesktopFile: openDesktopFile, openDesktopFiles: openDesktopFiles,
-      reloadFile: reloadFile, saveFile: saveFile, saveAll: saveAll,
+      reloadFile: reloadFile, reloadFileWithFeedback: reloadFileWithFeedback, saveFile: saveFile, saveAll: saveAll,
       switchFile: switchFile, closeFile: closeFile,
       listFiles: listFiles, getActiveFile: getActiveFile, getActiveIndex: getActiveIndex,
       hasUnsavedChanges: hasUnsavedChanges, getUnsavedFileNames: getUnsavedFileNames,

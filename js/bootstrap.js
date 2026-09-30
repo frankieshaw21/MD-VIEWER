@@ -89,7 +89,7 @@
       bridged = true;
       const editorNames = ['fmt','insertHeading','insertCodeBlock','insertLink','insertImage','insertQuote',
         'insertChecklist','insertTable','insertHR','insertMermaid','toggleSource','toggleSplit'];
-      const fileNames = ['openFile','reloadFile','saveFile','saveAll','switchFile','closeFile','relinkCurrentFile',
+      const fileNames = ['openFile','reloadFile','reloadFileWithFeedback','saveFile','saveAll','switchFile','closeFile','relinkCurrentFile',
         'closeFileBrowser','fbGoUp','fbNavigate'];
       const uiNames = ['toggleSidebar','switchTab','scrollToHeading','toggleTextColorPalette','toggleContentWidth','toggleTheme','copyCode'];
       editorNames.forEach(function(name) {

@@ -126,6 +126,7 @@
       <button onclick="fmt('underline')"><u>下划线</u></button><button onclick="fmt('strikeThrough')"><s>删除线</s></button>
       <button onclick="toggleContentWidth()" id="widthBtn" data-tip="内容宽度：标准（点击切换）" aria-label="内容宽度：标准">标准</button>
       <button onclick="toggleTheme()" id="themeBtn" data-tip="切换主题">🌙 主题</button>
+      <button type="button" id="desktopCheckUpdatesBtn" style="display:none">检查软件更新</button>
       <button onclick="chooseDefaultApp()" id="desktopDefaultBtn" data-tip="设为 Markdown 默认应用" style="display:none">默认应用</button>
     </div></details>
     <button onclick="toggleTextColorPalette()" onmousedown="event.preventDefault()" id="textColorBtn" data-tip="文字颜色" aria-haspopup="menu" aria-expanded="false"><span style="font-weight:600">A</span><span style="font-size:9px">▾</span></button>
@@ -177,7 +178,7 @@
     <span id="lastModified">更新时间: --</span>
     <span id="modifiedIndicator"></span>
     <span id="linkFileHint" onclick="relinkCurrentFile()" title="点击授权或重新选择文件，以启用外部修改实时更新" style="display:none;cursor:pointer;color:#b36b00;">⚠ 点击授权文件访问，启用实时更新</span>
-    <button type="button" class="status-refresh" onclick="reloadFile()" title="重新加载当前文件 Ctrl+R">↻ 更新</button>
+    <button type="button" class="status-refresh" id="reloadFileButton" onclick="reloadFileWithFeedback()" title="重新加载当前文件 Ctrl+R">↻ 更新</button>
   </div>
 </div>
 
@@ -219,14 +220,14 @@
 <script src="js/parser.js?v=20260929-1"></script>
 <script src="js/history.js?v=20260805-8"></script>
 <script src="js/editor.js?v=20260924-ui"></script>
-<script src="js/files.js?v=20260805-8"></script>
+<script src="js/files.js?v=20260929-1"></script>
 <script src="js/tables.js?v=20260805-8"></script>
 <script src="js/clipboard.js?v=20260929-1"></script>
-<script src="js/ui.js?v=20260805-8"></script>
+<script src="js/ui.js?v=20260929-1"></script>
 <script src="js/source-tools.js?v=20260805-8"></script>
 <script src="js/search.js?v=20260805-8"></script>
 <script src="js/mermaid-tools.js?v=20260805-8"></script>
-<script src="js/desktop.js?v=20260805-8"></script>
-<script src="js/bootstrap.js?v=20260805-8"></script>
+<script src="js/desktop.js?v=20260929-1"></script>
+<script src="js/bootstrap.js?v=20260929-1"></script>
 </body>
 </html>

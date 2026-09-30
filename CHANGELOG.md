@@ -6,6 +6,12 @@
 
 暂无。
 
+## [0.1.6] - 2026-09-29
+
+### 修复
+- 软件更新检查不再调用受匿名限流影响的 GitHub API；桌面版“更多 → 检查软件更新”提供检查中、结果与失败反馈。
+- 状态栏“↻ 更新”重新加载文档时显示进度、结果或错误；桌面与服务端读取超时后提示重试。
+
 ## [0.1.5] - 2026-09-29
 
 ### 修复
@@ -53,6 +59,7 @@
 ### 说明
 - 外部文件修改的定时发现可能略有延迟；手动打开、重载和保存功能不受影响。
 
+[0.1.6]: https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.6
 [0.1.5]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.5
 [0.1.4]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.4
 [0.1.3]: https://github.com/bwj6wjrtsk-hash/MD-VIEWER/releases/tag/v0.1.3

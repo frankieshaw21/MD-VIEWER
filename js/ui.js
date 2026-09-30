@@ -379,7 +379,7 @@
           if (editor.getViewMode() === 'preview') editor.toggleSource();
           global.setTimeout(function() { sourceTools.openGoToLine(); }, 0);
         }
-        else if (key === 'r') { event.preventDefault(); files.reloadFile(); }
+        else if (key === 'r') { event.preventDefault(); files.reloadFileWithFeedback(); }
         else if (key === '/') { event.preventDefault(); editor.invoke('toggleSource'); }
         else if (key === 'p') { event.preventDefault(); global.print(); }
         else if (key === 'b') { event.preventDefault(); editor.invoke('fmt', ['bold']); }

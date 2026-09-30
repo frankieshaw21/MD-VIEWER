@@ -49,6 +49,36 @@
     }
   });
 
+  let checkingUpdates = false;
+  let updateStatusTimer = null;
+  async function checkUpdates(button) {
+    if (checkingUpdates) return;
+    checkingUpdates = true;
+    if (updateStatusTimer) global.clearTimeout(updateStatusTimer);
+    button.disabled = true;
+    button.textContent = '正在检查…';
+    try {
+      const update = await request('check-updates');
+      if (update && update.version && update.url) {
+        button.textContent = '发现 ' + update.version;
+        if (global.confirm('发现新版本 ' + update.version + '。是否打开发布页面下载？'))
+          await request('open-external', { url: update.url });
+      } else {
+        button.textContent = '已是最新版本';
+      }
+    } catch (error) {
+      button.textContent = '检查失败';
+      global.alert('检查软件更新失败：' + (error && error.message ? error.message : String(error)));
+    } finally {
+      checkingUpdates = false;
+      button.disabled = false;
+      updateStatusTimer = global.setTimeout(function() {
+        button.textContent = '检查软件更新';
+        updateStatusTimer = null;
+      }, 4000);
+    }
+  }
+
   function start(nextContext) {
     if (started) return;
     started = true;
@@ -56,6 +86,11 @@
     document.body.classList.add('desktop-mode');
     const button = document.getElementById('desktopDefaultBtn');
     if (button) button.style.display = '';
+    const updateButton = document.getElementById('desktopCheckUpdatesBtn');
+    if (updateButton) {
+      updateButton.style.display = '';
+      updateButton.addEventListener('click', function() { checkUpdates(updateButton); });
+    }
     context.on('file:activated', updateTitle);
     context.on('file:modified', updateTitle);
     context.on('document:saved', updateTitle);
