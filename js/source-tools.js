@@ -279,6 +279,9 @@
     function syncScroll() {
       const scrollTop = sourceEditor.scrollTop;
       const scrollLeft = sourceEditor.scrollLeft;
+      // The textarea scrollbar consumes layout width; the overlay has none.
+      // Match its client box so long lines wrap at the same character.
+      highlightLayer.style.width = sourceEditor.clientWidth + 'px';
       shell.style.setProperty('--source-scroll-top', String(-scrollTop) + 'px');
       shell.style.setProperty('--source-scroll-left', String(-scrollLeft) + 'px');
       highlightContent.style.transform = 'translate(' + (-scrollLeft) + 'px, ' + (-scrollTop) + 'px)';
@@ -461,7 +464,7 @@
         event.preventDefault();
         closeGoToLine();
       });
-      win.addEventListener('resize', function() { syncCurrentLine(true); });
+      win.addEventListener('resize', function() { syncScroll(); syncCurrentLine(true); });
       if (typeof context.on === 'function') {
         context.on('mode:changed', refresh);
         context.on('document:replaced', refresh);

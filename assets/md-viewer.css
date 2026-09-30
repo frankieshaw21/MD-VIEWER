@@ -1106,7 +1106,17 @@ body.eye-care .source-editor-input { caret-color: #24452a; }
   color: var(--panel-text);
   background: transparent;
 }
-.source-editor-highlight-content { display: block; min-height: 100%; transform-origin: 0 0; }
+.source-editor-highlight-content {
+  display: block;
+  min-height: 100%;
+  transform-origin: 0 0;
+  font: inherit;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  tab-size: inherit;
+}
+/* Highlight tokens must not change textarea glyph metrics or wrapping. */
+.source-editor-highlight-content span { font: inherit; }
 .source-editor-current-line {
   position: absolute;
   z-index: 1;
