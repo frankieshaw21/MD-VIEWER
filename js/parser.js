@@ -276,7 +276,15 @@ function mdToHtml(md) {
     }
 
     // Blank line
-    if (line.trim() === '') { i++; continue; }
+    if (line.trim() === '') {
+      const start = i;
+      while (i < lines.length && lines[i].trim() === '') i++;
+      // The final empty split entry represents a line ending, not a blank line.
+      const count = i - start - (i === lines.length && lines[i - 1] === '' ? 1 : 0);
+      if (count > 0) html += '<div class="md-blank-lines" data-md-blank-lines="' + count +
+        '" style="height:' + count + 'lh" contenteditable="false" aria-hidden="true"></div>';
+      continue;
+    }
 
     // Paragraph (collect consecutive non-blank, non-special lines)
     const paraLines = [];
@@ -417,10 +425,16 @@ function normalizeTextColorMarkup(root) {
 
 function domToMd(node) {
   let md = '';
+  let blankLines = null;
   node.childNodes.forEach(child => {
     if (child.nodeType === 3) { md += child.textContent; return; }
     if (child.nodeType !== 1) return;
     const tag = child.tagName.toLowerCase();
+    if (child.classList.contains('md-blank-lines') && child.hasAttribute('data-md-blank-lines')) {
+      blankLines = (blankLines || 0) + Math.max(0, Math.min(1000000, Number(child.getAttribute('data-md-blank-lines')) || 0));
+      return;
+    }
+    const before = md.length;
     if (tag === 'h1') md += '\n# ' + domToMd(child) + '\n\n';
     else if (tag === 'h2') md += '\n## ' + domToMd(child) + '\n\n';
     else if (tag === 'h3') md += '\n### ' + domToMd(child) + '\n\n';
@@ -482,7 +496,14 @@ function domToMd(node) {
     else if (tag === 'iframe') md += '\n' + child.outerHTML + '\n\n';
     else if (tag === 'table') md += domTableToMd(child);
     else md += domToMd(child);
+    if (blankLines !== null) {
+      // Replace serializer-added block separators with the explicit source gap.
+      md = md.slice(0, before).replace(/\n+$/, '') + '\n'.repeat(blankLines + (before ? 1 : 0)) +
+        md.slice(before).replace(/^\n+/, '');
+      blankLines = null;
+    }
   });
+  if (blankLines !== null) md = md.replace(/\n+$/, '') + '\n'.repeat(blankLines + 1);
   return md;
 }
 

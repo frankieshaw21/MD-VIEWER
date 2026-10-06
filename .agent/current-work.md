@@ -3,9 +3,11 @@
 ## 分支与版本
 
 - 当前工作分支：`feature/lark-sync`；开始新任务时运行 `git status -sb` 再确认，分支可能变化。
-- 当前 `VERSION`：`0.1.10`；标签指向发布提交 `d5da12c`，[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37410485147) 成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.10) 已发布安装包（261,864,533 字节）及 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致，未下载完整包或执行安装升级。上次正式发布为 `v0.1.9`，此前用户授权的提交 `7ef5618` 与标签 `v0.1.9` 已推送至 origin。[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37406510811) 构建成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.9) 已发布 Windows x64 安装包（261,863,756 字节）和 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致。未下载完整安装包或执行安装升级，干净环境安装仍未验收。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
+- 当前 `VERSION`：`0.1.11`；用户授权提交、发布本次更新安装及预览空行修复，准备推送 `v0.1.11` 触发发布（结果待核对）。此前 `v0.1.10`：标签指向发布提交 `d5da12c`，[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37410485147) 成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.10) 已发布安装包（261,864,533 字节）及 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致，未下载完整包或执行安装升级。上次正式发布为 `v0.1.9`，此前用户授权的提交 `7ef5618` 与标签 `v0.1.9` 已推送至 origin。[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37406510811) 构建成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.9) 已发布 Windows x64 安装包（261,863,756 字节）和 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致。未下载完整安装包或执行安装升级，干净环境安装仍未验收。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
 
 ## 当前任务
+
+- 预览/分屏现保留块之间的源码空行，按空行数量生成具有行高的留白节点；HTML→Markdown 转换识别该节点并替换自动块分隔，避免预览编辑后空行累加。Edge 离线运行 `tests/preview-blank-lines.mjs` 验证用户提供的连续标题、1/2/4 空行回转、两次预览编辑、分屏及围栏代码通过；`tests/performance-regression.mjs` 功能回归通过。JS 语法、差异检查及最新桌面构建通过（既有 WindowsBase 警告）；后续修正桌面调试启动的 PowerShell 环境变量引用，对最新 `desktop/publish/MDViewer.exe` 的 WebView2 执行同一空行测试及性能/功能回归均通过（仅临时内存文档，不代表磁盘保存、安装或真实 IME 验收）；未安装或发布。
 
 - `v0.1.9` 发布后追加修复：同步窗口替代 URL/方向输入框，失败仅显示原因，不回显 PowerShell CLIXML/原始 stderr；内置 CLI 安装、应用配置、浏览器授权与权限检查教程。已对最新桌面构建执行端到端回归并截取预览，另验证真实不存在的 CLI 命令错误、登录过期/权限/网络原因分类；真实飞书授权仍未验收。用户已确认 apply 并授权本地提交，方案已应用到正式源码与本地桌面构建（`desktop/publish/MDViewer.exe`）；修复提交 `d2c0c88` 已推送。修复已随用户授权的 `v0.1.10` 正式发布，GitHub Actions、安装包和校验文件已核对；未执行本机安装。
 
