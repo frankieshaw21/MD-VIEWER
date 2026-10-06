@@ -46,21 +46,25 @@
       message.ok ? waiter.resolve(message.data) : waiter.reject(new Error(message.error || '桌面操作失败'));
     } else if (message.kind === 'open-files') {
       openPaths(message.paths || []).catch(function(error) { alert(error.message); });
-    } else if (message.kind === 'update-download-progress' && updateButton) {
+    } else if (message.kind === 'update-download-progress' && updateButton && checkingUpdates && !downloadedUpdate) {
       updateButton.textContent = '下载更新 ' + message.percent + '%';
     }
   });
 
   let checkingUpdates = false;
+  let installingUpdate = false;
   let updateButton = null;
   let downloadedUpdate = null;
   let updateStatusTimer = null;
   async function installDownloadedUpdate(button) {
+    if (installingUpdate) return;
+    installingUpdate = true;
     button.disabled = true;
     button.textContent = '准备安装…';
     try {
       await request('install-update');
     } catch (error) {
+      installingUpdate = false;
       button.disabled = false;
       button.textContent = '安装 ' + downloadedUpdate;
       global.alert('无法安装更新：' + (error && error.message ? error.message : String(error)));
@@ -77,11 +81,11 @@
       const update = await request('check-updates');
       if (update && update.version && update.url) {
         button.textContent = '发现 ' + update.version;
-        if (global.confirm('发现新版本 ' + update.version + '。是否在后台下载更新包？下载期间可继续编辑文档。')) {
+        if (global.confirm('发现新版本 ' + update.version + '。是否下载并安装更新？下载期间可继续编辑，校验完成后将自动启动安装并关闭应用。请先保存所有文档。')) {
           button.textContent = '下载更新 0%';
           await request('download-update', { version: update.version });
           downloadedUpdate = update.version;
-          button.textContent = '安装 ' + update.version;
+          await installDownloadedUpdate(button);
         }
       } else {
         button.textContent = '已是最新版本';
@@ -91,7 +95,7 @@
       global.alert('检查软件更新失败：' + (error && error.message ? error.message : String(error)));
     } finally {
       checkingUpdates = false;
-      button.disabled = false;
+      button.disabled = installingUpdate;
       if (!downloadedUpdate) updateStatusTimer = global.setTimeout(function() {
         button.textContent = '检查软件更新';
         updateStatusTimer = null;
