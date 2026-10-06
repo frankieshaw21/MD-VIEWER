@@ -3,11 +3,11 @@
 ## 分支与版本
 
 - 当前工作分支：`feature/lark-sync`；开始新任务时运行 `git status -sb` 再确认，分支可能变化。
-- 当前 `VERSION`：`0.1.9`；用户授权的提交 `7ef5618` 与标签 `v0.1.9` 已推送至 origin。[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37406510811) 构建成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.9) 已发布 Windows x64 安装包（261,863,756 字节）和 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致。未下载完整安装包或执行安装升级，干净环境安装仍未验收。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
+- 当前 `VERSION`：`0.1.10`，已获用户授权准备发布；上次正式发布为 `v0.1.9`。用户授权的提交 `7ef5618` 与标签 `v0.1.9` 已推送至 origin。[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37406510811) 构建成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.9) 已发布 Windows x64 安装包（261,863,756 字节）和 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致。未下载完整安装包或执行安装升级，干净环境安装仍未验收。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
 
 ## 当前任务
 
-- `v0.1.9` 发布后追加修复：同步窗口替代 URL/方向输入框，失败仅显示原因，不回显 PowerShell CLIXML/原始 stderr；内置 CLI 安装、应用配置、浏览器授权与权限检查教程。已对最新桌面构建执行端到端回归并截取预览，另验证真实不存在的 CLI 命令错误、登录过期/权限/网络原因分类；真实飞书授权仍未验收。用户已确认 apply 并授权本地提交，方案已应用到正式源码与本地桌面构建（`desktop/publish/MDViewer.exe`）；本次不推送、安装或发布。
+- `v0.1.9` 发布后追加修复：同步窗口替代 URL/方向输入框，失败仅显示原因，不回显 PowerShell CLIXML/原始 stderr；内置 CLI 安装、应用配置、浏览器授权与权限检查教程。已对最新桌面构建执行端到端回归并截取预览，另验证真实不存在的 CLI 命令错误、登录过期/权限/网络原因分类；真实飞书授权仍未验收。用户已确认 apply 并授权本地提交，方案已应用到正式源码与本地桌面构建（`desktop/publish/MDViewer.exe`）；修复提交 `d2c0c88` 已推送。用户现已授权发布 `v0.1.10`，发布结果需核对 GitHub Actions 和安装包资产，不执行本机安装。
 
 - 新增桌面“更多 → 同步飞书文档”手动 push/pull，使用 `desktop/LarkSync.cs` 调用已授权 lark-cli；支持 revision/哈希冲突拒绝和下载备份，不含自动同步或合并 UI。完成服务模拟 CLI 集成测试、最新桌面 WebView2 按钮/原生桥接端到端测试及离线 Edge 回归；补测修复远端 `content: null` 可能清空本地的问题。详情和重放命令见 [飞书同步自测](test-results/lark-sync-self-test.md)。真实飞书授权/文档、原生对话框人工操作、超时/崩溃等仍未验收；mock 通过不代表真实飞书同步通过。
 
