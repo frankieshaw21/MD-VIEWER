@@ -3,7 +3,7 @@
 ## 分支与版本
 
 - 当前工作分支：`feature/lark-sync`；开始新任务时运行 `git status -sb` 再确认，分支可能变化。
-- 当前 `VERSION`：`0.1.9`，已获用户授权准备提交和发布；最后已存在的远端标签为 `v0.1.8`。标签推送后的 GitHub Actions 与 Release 结果需单独核对。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
+- 当前 `VERSION`：`0.1.9`；用户授权的提交 `7ef5618` 与标签 `v0.1.9` 已推送至 origin。[发布工作流](https://github.com/frankieshaw21/MD-VIEWER/actions/runs/37406510811) 构建成功，[正式 Release](https://github.com/frankieshaw21/MD-VIEWER/releases/tag/v0.1.9) 已发布 Windows x64 安装包（261,863,756 字节）和 SHA-256 文件；已确认校验文件与 GitHub 资产 digest 一致。未下载完整安装包或执行安装升级，干净环境安装仍未验收。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
 
 ## 当前任务
 
