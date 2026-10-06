@@ -17,8 +17,25 @@
 参考 [lark-md-sync-desktop](https://github.com/frankieshaw21/lark-md-sync-desktop)，通过已安装且完成用户授权的 `lark-cli` 操作飞书，不在 MD Viewer 中保存授权凭据。此可选功能需要联网及 Windows PowerShell；普通离线编辑不受影响。可用 `LARK_MD_SYNC_CLI` 指定 CLI 路径。
 
 1. 打开本地 Markdown 并保存所有改动。
-2. 点击“更多 → 同步飞书文档”，填写有权限的 Wiki / Docx 链接。
-3. 输入 `push` 上传，或 `pull` 下载，并确认覆盖方向。首次上传覆盖远端；下载在文件旁保留唯一命名的 `.lark-backup-*.md` 备份。
+2. 点击“更多 → 同步飞书文档”，在同步窗口填写有权限的 Wiki / Docx 链接。
+3. 点击“上传到飞书”或“下载到本地”，并确认覆盖方向。首次上传覆盖远端；下载在文件旁保留唯一命名的 `.lark-backup-*.md` 备份。失败只显示简短原因，不展示 PowerShell XML/原始日志；缺少 CLI、授权或权限时自动展开教程。
+
+### 首次安装与飞书授权
+
+同步窗口内置相同教程。先从 [Node.js 官网](https://nodejs.org/zh-cn/download) 安装 LTS（含 npm），再在 Windows 终端 / PowerShell 中依次操作：
+
+```powershell
+# 安装 CLI；使用 npx.cmd 避免 PowerShell 对 npx.ps1 的执行策略限制
+npx.cmd @larksuite/cli@latest install
+# 配置应用：按引导在浏览器创建/选择应用，或使用企业提供的凭证
+lark-cli config init
+# 使用有文档权限的账号登录，并在浏览器确认授权
+lark-cli auth login --recommend
+# 检查登录状态和授权范围
+lark-cli auth status
+```
+
+安装后重启 MD Viewer 以读取新 PATH；如命令仍无法识别，重新打开终端确认 CLI 已安装并在 PATH 中。下载需要云文档读取权限，上传需要编辑权限，Wiki 还需对应知识库访问权限。推荐授权不替代企业权限审批；应用权限受限制时请联系管理员，并按 CLI 引导授予所需权限后重新登录。不要把应用密钥或登录凭据发给他人，MD Viewer 不保存这些凭据。完整 CLI 配置说明见 [官方指南](https://github.com/larksuite/cli)。
 
 后续上传使用 revision 并发保护，下载检查本地内容哈希；目标发生变化时拒绝覆盖，基线不推进。冲突需手动核对两端，将两端内容调整一致后再同步；当前不提供冲突合并窗口、自动轮询或多任务管理。下载期间若继续编辑，重载由现有未保存/外部变化流程处理，请先核对再选择，勿放弃新改动。Markdown 无法无损保留飞书专属 Block、样式和评论。
 

@@ -95,6 +95,17 @@ if ($a[1] -eq '+update') {
     await LarkSync.SyncAsync(path, url, "pull");
     if (await File.ReadAllTextAsync(path) != "") throw new Exception("Valid empty document rejected");
     Console.WriteLine("PASS: first download backs up local; valid empty Markdown accepted");
+    Environment.SetEnvironmentVariable("LARK_MD_SYNC_CLI", Path.Combine(temp, "not-installed.exe"));
+    try { await LarkSync.SyncAsync(path, url, "pull"); throw new Exception("Expected missing CLI rejection"); }
+    catch (InvalidOperationException error) {
+        if (!error.Message.Contains("未找到 lark-cli") || error.Message.Contains("CLIXML")) throw;
+    }
+    if (!LarkSync.FailureReason("#< CLIXML <S>CommandNotFoundException</S>", 1).Contains("未找到 lark-cli") ||
+        !LarkSync.FailureReason("user token expired", 2).Contains("登录已过期") ||
+        !LarkSync.FailureReason("insufficient scope", 3).Contains("授权范围") ||
+        !LarkSync.FailureReason("connection timeout", 4).Contains("网络")) throw new Exception("Error classification failed");
+    if (LarkSync.FailureReason("#< CLIXML private raw error", 5).Contains("CLIXML")) throw new Exception("Raw error leaked");
+    Console.WriteLine("PASS: real missing command and sanitized CLI/auth/permission/network reasons");
 }
 finally
 {

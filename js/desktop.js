@@ -99,27 +99,51 @@
     }
   }
 
-  async function syncLark(button) {
+  let larkBusy = false;
+  let larkFile = null;
+  function larkStatus(kind, message) {
+    const status = document.getElementById('larkSyncStatus');
+    status.dataset.kind = kind;
+    status.textContent = message;
+    status.hidden = !message;
+  }
+  function openLarkSync() {
+    larkFile = context.getPort('files').getActiveFile();
+    document.getElementById('larkSyncFile').textContent = larkFile ? larkFile.name : '尚未打开本地文件';
+    const key = larkFile && larkFile.desktopPath ? 'mdviewer-lark-url:' + larkFile.desktopPath : null;
+    document.getElementById('larkSyncUrl').value = key ? localStorage.getItem(key) || '' : '';
+    larkStatus('', '');
+    document.getElementById('larkSyncDialog').showModal();
+  }
+  async function syncLark(direction) {
+    if (larkBusy) return;
     const files = context.getPort('files');
-    const file = files.getActiveFile();
-    if (!file || !file.desktopPath) return global.alert('请先打开本地 Markdown 文件。');
+    const file = larkFile;
+    if (!file || !file.desktopPath) return larkStatus('error', '请先打开本地 Markdown 文件。');
+    if (files.getActiveFile() !== file) return larkStatus('error', '当前文档已切换，请关闭窗口后重新打开同步。');
     context.getPort('editor').getContent({ flush: true });
-    if (files.hasUnsavedChanges()) return global.alert('请先保存所有未保存的文档，再同步飞书。');
-    const key = 'mdviewer-lark-url:' + file.desktopPath;
-    const url = global.prompt('飞书 Wiki / Docx 链接（需先安装 lark-cli 并完成用户授权）', localStorage.getItem(key) || '');
-    if (!url) return;
-    const direction = global.prompt('输入 push 上传本地到飞书，或 pull 下载飞书到本地。\n首次上传会覆盖远端，下载会覆盖本地并保留备份。Markdown 不保留所有飞书样式和评论。', 'push');
-    if (direction !== 'push' && direction !== 'pull') return;
-    if (!global.confirm(direction === 'push' ? '确认以已保存的本地内容更新飞书？' : '确认下载飞书内容覆盖本地文件？原内容将备份。')) return;
-    button.disabled = true;
-    button.textContent = '正在同步…';
+    if (files.hasUnsavedChanges()) return larkStatus('error', '请先保存所有未保存的文档，再同步飞书。');
+    const url = document.getElementById('larkSyncUrl').value.trim();
+    if (!url) return larkStatus('error', '请填写飞书文档链接。');
+    larkStatus('', '');
+    if (!global.confirm(direction === 'push' ? '确认以已保存的本地内容更新飞书？首次上传将覆盖远端。' : '确认下载飞书内容覆盖本地文件？原内容将备份。')) return;
+    larkBusy = true;
+    const controls = ['larkSyncPush', 'larkSyncPull', 'larkSyncClose', 'larkSyncUrl'];
+    controls.forEach(function(id) { document.getElementById(id).disabled = true; });
+    larkStatus('progress', '正在同步，请稍候…');
     try {
       const result = await request('lark-sync', { path: file.desktopPath, url: url, direction: direction });
-      localStorage.setItem(key, url);
-      if (direction === 'pull' && files.getActiveFile() === file) await files.reloadFile();
-      global.alert('飞书同步成功。' + (result.backup ? '\n本地备份：' + result.backup : ''));
-    } catch (error) { global.alert('飞书同步失败：' + error.message); }
-    finally { button.disabled = false; button.textContent = '同步飞书文档'; }
+      localStorage.setItem('mdviewer-lark-url:' + file.desktopPath, url);
+      let reloaded = true;
+      if (direction === 'pull' && files.getActiveFile() === file) reloaded = await files.reloadFile();
+      larkStatus('success', '飞书同步成功。' + (reloaded === false ? '\n本地文件已更新；编辑器保留你的未保存改动。' : '') + (result.backup ? '\n本地备份：' + result.backup : ''));
+    } catch (error) {
+      larkStatus('error', '同步失败\n原因：' + error.message);
+      if (/lark-cli|授权|登录|权限/.test(error.message)) document.getElementById('larkAuthHelp').open = true;
+    } finally {
+      larkBusy = false;
+      controls.forEach(function(id) { document.getElementById(id).disabled = false; });
+    }
   }
 
   function start(nextContext) {
@@ -132,7 +156,11 @@
     const syncButton = document.getElementById('desktopLarkSyncBtn');
     if (syncButton) {
       syncButton.style.display = '';
-      syncButton.addEventListener('click', function() { syncLark(syncButton); });
+      syncButton.addEventListener('click', openLarkSync);
+      document.getElementById('larkSyncPush').addEventListener('click', function() { syncLark('push'); });
+      document.getElementById('larkSyncPull').addEventListener('click', function() { syncLark('pull'); });
+      document.getElementById('larkSyncClose').addEventListener('click', function() { if (!larkBusy) document.getElementById('larkSyncDialog').close(); });
+      document.getElementById('larkSyncDialog').addEventListener('cancel', function(event) { if (larkBusy) event.preventDefault(); });
     }
     updateButton = document.getElementById('desktopCheckUpdatesBtn');
     if (updateButton) {

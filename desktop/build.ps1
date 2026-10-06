@@ -14,7 +14,7 @@ if (Test-Path $output) { Remove-Item $output -Recurse -Force }
 & $dotnet publish $project -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o $output
 if ($LASTEXITCODE -ne 0) { throw 'MD Viewer publish failed.' }
 $requiredFiles = @(
-    'MDViewer.exe', 'app\md-viewer.html', 'app\mermaid.min.js', 'app\assets\md-viewer.css',
+    'MDViewer.exe', 'app\md-viewer.html', 'app\mermaid.min.js', 'app\assets\md-viewer.css', 'app\assets\lark-sync.css',
     'app\js\bootstrap.js', 'app\js\clipboard.js', 'app\js\context.js', 'app\js\desktop.js',
     'app\js\editor.js', 'app\js\files.js', 'app\js\history.js', 'app\js\parser.js',
     'app\js\tables.js', 'app\js\ui.js'

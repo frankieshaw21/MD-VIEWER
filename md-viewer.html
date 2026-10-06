@@ -6,8 +6,34 @@
 <title>Markdown Editor</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%234a90d9'/><path d='M5 22V10h4l3 5 3-5h4v12h-4v-6l-3 4-3-4v6H5zm17-12v12h3l4-5v5h3V10h-3l-4 5v-5h-3z' fill='white'/></svg>">
 <link rel="stylesheet" href="assets/md-viewer.css?v=20260930-perf2">
+<link rel="stylesheet" href="assets/lark-sync.css?v=20261006-auth">
 </head>
 <body>
+<dialog id="larkSyncDialog" class="lark-sync-dialog" aria-labelledby="larkSyncTitle">
+  <div class="lark-sync-header"><div><h2 id="larkSyncTitle">同步飞书文档</h2><p>当前文档与飞书之间，手动同步</p></div><button type="button" id="larkSyncClose" aria-label="关闭">×</button></div>
+  <div class="lark-sync-body">
+    <div class="lark-sync-file">当前文件 <strong id="larkSyncFile"></strong></div>
+    <label for="larkSyncUrl">飞书文档链接</label>
+    <input id="larkSyncUrl" type="url" placeholder="https://你的组织.feishu.cn/docx/…" autocomplete="off">
+    <p class="lark-sync-hint">支持有权限的 Wiki / Docx 文档。首次上传将覆盖远端；下载会保留本地备份。</p>
+    <div id="larkSyncStatus" class="lark-sync-status" role="status" aria-live="polite" hidden></div>
+    <details id="larkAuthHelp" class="lark-auth-help">
+      <summary>首次使用？查看安装与授权教程</summary>
+      <div class="lark-auth-steps">
+        <p>在 Windows 终端 / PowerShell 中操作；请先安装 Node.js LTS（含 npm），再完成以下步骤。</p>
+        <ol>
+          <li><strong>安装飞书 CLI</strong><code>npx.cmd @larksuite/cli@latest install</code><span>安装完成后重启 MD Viewer，让应用读取新的 PATH。</span></li>
+          <li><strong>配置飞书应用</strong><code>lark-cli config init</code><span>按引导在浏览器中创建或选择应用。已有企业应用可填写自己的凭证；不要把凭证发给他人。</span></li>
+          <li><strong>登录并授权</strong><code>lark-cli auth login --recommend</code><span>使用有文档权限的飞书账号，在浏览器确认授权。确保授予云文档读取、编辑权限；Wiki 链接还需相应知识库权限。</span></li>
+          <li><strong>检查授权状态</strong><code>lark-cli auth status</code><span>确认已登录及所需权限已授权，然后返回这里同步。</span></li>
+        </ol>
+        <p class="lark-auth-note">企业限制创建应用或授权时，请联系管理员。账号授权不等于文档权限：下载需可读，上传需可编辑。MD Viewer 不保存你的应用密钥或登录凭据。</p>
+      </div>
+    </details>
+    <p class="lark-sync-hint">Markdown 无法完整保留飞书专属 Block、样式与评论。同步前请保存本地改动。</p>
+  </div>
+  <div class="lark-sync-footer"><button type="button" id="larkSyncPull">↓ 下载到本地</button><button type="button" id="larkSyncPush" class="lark-primary">↑ 上传到飞书</button></div>
+</dialog>
 <div class="drag-overlay" id="dragOverlay">📄 拖放 .md 文件到这里</div>
 <div class="minimap" id="minimap">
   <div class="minimap-content">
@@ -228,7 +254,7 @@
 <script src="js/source-tools.js?v=20260930-perf2"></script>
 <script src="js/search.js?v=20260805-8"></script>
 <script src="js/mermaid-tools.js?v=20260805-8"></script>
-<script src="js/desktop.js?v=20261001-lark"></script>
+<script src="js/desktop.js?v=20261006-auth"></script>
 <script src="js/bootstrap.js?v=20260929-1"></script>
 </body>
 </html>

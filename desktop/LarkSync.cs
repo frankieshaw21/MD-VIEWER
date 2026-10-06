@@ -77,12 +77,14 @@ internal static class LarkSync
         // Encode a script with literal, escaped arguments; never interpolate shell syntax from a URL.
         static string Literal(string value) => "'" + value.Replace("'", "''") + "'";
         var cli = Environment.GetEnvironmentVariable("LARK_MD_SYNC_CLI") ?? "lark-cli";
-        var script = "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); & " +
-            Literal(cli) + " " + string.Join(" ", arguments.Select(Literal)) + "; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }";
+        var script = "$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); " +
+            "$command=Get-Command -Name " + Literal(cli) + " -ErrorAction SilentlyContinue; " +
+            "if ($null -eq $command) {[Console]::Error.WriteLine('[MDVIEWER_CLI_NOT_FOUND]'); exit 127}; " +
+            "& $command " + string.Join(" ", arguments.Select(Literal)) + "; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }";
         var start = new ProcessStartInfo("powershell.exe")
         { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
-        foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script)) }) start.ArgumentList.Add(argument);
+        foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-OutputFormat", "Text", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script)) }) start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动 lark-cli，请安装并完成用户授权。");
         var stdout = process.StandardOutput.ReadToEndAsync();
         var stderr = process.StandardError.ReadToEndAsync();
@@ -91,10 +93,35 @@ internal static class LarkSync
         catch (OperationCanceledException) { process.Kill(true); throw new InvalidOperationException("飞书操作超时；上传可能已生效，请核对远端后再操作。"); }
         var output = await stdout;
         var error = await stderr;
-        if (process.ExitCode != 0) throw new InvalidOperationException("lark-cli 操作失败，请检查安装、用户授权与文档权限。" + error[..Math.Min(error.Length, 500)]);
-        using var json = JsonDocument.Parse(output);
-        if (!json.RootElement.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True)
-            throw new InvalidOperationException("飞书返回失败，未推进同步基线。");
-        return json.RootElement.Clone();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException(FailureReason(output + "\n" + error, process.ExitCode));
+        JsonDocument json;
+        try { json = JsonDocument.Parse(output); }
+        catch (JsonException) { throw new InvalidOperationException("飞书命令返回了无法识别的数据，请更新 lark-cli 后重试。"); }
+        using (json)
+        {
+            if (!json.RootElement.TryGetProperty("ok", out var ok) || ok.ValueKind != JsonValueKind.True)
+                throw new InvalidOperationException(FailureReason(output, null));
+            return json.RootElement.Clone();
+        }
+    }
+
+    // Raw stderr can contain CLIXML, tokens or document content. Never display it.
+    internal static string FailureReason(string detail, int? exitCode)
+    {
+        var text = detail.ToLowerInvariant();
+        if (text.Contains("mdviewer_cli_not_found") || text.Contains("commandnotfoundexception"))
+            return "未找到 lark-cli。请按下方教程安装，安装后重启 MD Viewer。";
+        if (text.Contains("scope") || text.Contains("permission") || text.Contains("forbidden") || text.Contains("99991672") || text.Contains("权限"))
+            return "没有文档访问权限或缺少授权范围。请检查文档共享权限，并重新授权云文档读写权限。";
+        if (text.Contains("unauthorized") || text.Contains("not logged") || text.Contains("login required") || text.Contains("token") || text.Contains("99991663") || text.Contains("未登录"))
+            return "飞书尚未授权或登录已过期。请按下方教程重新登录授权。";
+        if (text.Contains("not found") || text.Contains("404"))
+            return "飞书文档不存在或链接已失效，请检查文档链接。";
+        if (text.Contains("network") || text.Contains("timeout") || text.Contains("connection") || text.Contains("dns") || text.Contains("网络"))
+            return "无法连接飞书，请检查网络或代理后重试。";
+        return exitCode.HasValue
+            ? $"飞书命令执行失败（退出码 {exitCode}）。请先检查授权状态，再重试。"
+            : "飞书拒绝了本次操作。请检查授权状态和文档权限后重试。";
     }
 }

@@ -35,6 +35,8 @@ try {
 $r = Get-Content -LiteralPath $env:MDVIEWER_MOCK_REMOTE -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($r.mode -eq 'failure') { [Console]::Error.WriteLine('mock permission denied'); exit 3 }
 if ($r.mode -eq 'malformed') { Write-Output 'not json'; exit 0 }
+if ($r.mode -eq 'missing') { [Console]::Error.WriteLine('[MDVIEWER_CLI_NOT_FOUND] #< CLIXML <Objs>secret</Objs>'); exit 127 }
+if ($r.mode -eq 'expired') { [Console]::Error.WriteLine('user token expired'); exit 2 }
 if ($r.mode -eq 'delay') { Start-Sleep -Seconds 2 }
 if ($a[1] -eq '+update') {
   $rev = $a[[Array]::IndexOf($a, '--revision-id') + 1]
@@ -86,7 +88,7 @@ if ($a[1] -eq '+update') {
   assert.equal(await evaluate('getComputedStyle(document.getElementById("desktopLarkSyncBtn")).display !== "none"'), true);
   assert.equal(await evaluate('MDViewer.app.getPort("files").listFiles().length'), 2, 'Isolated profile should not restore user documents');
   async function sync(direction, url = 'https://test.feishu.cn/docx/test') {
-    return evaluate(`(async()=>{ __alerts=[]; __prompts=${JSON.stringify([url, direction])}; const b=document.getElementById('desktopLarkSyncBtn'); b.click(); for(let i=0;i<150 && b.disabled;i++) await new Promise(r=>setTimeout(r,100)); if(b.disabled) throw Error('Sync did not finish'); return __alerts; })()`);
+    return evaluate(`(async()=>{ const d=document.getElementById('larkSyncDialog');if(d.open)d.close();document.getElementById('desktopLarkSyncBtn').click();document.getElementById('larkSyncUrl').value=${JSON.stringify(url)};const b=document.getElementById(${JSON.stringify(direction === 'push' ? 'larkSyncPush' : 'larkSyncPull')});b.click();for(let i=0;i<150 && b.disabled;i++)await new Promise(r=>setTimeout(r,100));if(b.disabled)throw Error('Sync did not finish');const s=document.getElementById('larkSyncStatus');return s.hidden?[]:[s.textContent];})()`);
   }
   const initial = await sync('push');
   assert.ok(initial.some(a => a.includes('同步成功')), JSON.stringify(initial));
@@ -115,19 +117,44 @@ if ($a[1] -eq '+update') {
   await evaluate(`__confirm=true`);
   assert.equal((await readdir(temp)).filter(n => n.includes('.lark-backup-')).length, 1);
   console.log('PASS cancelled sync makes no backup or write');
-  for (const mode of ['failure', 'malformed']) {
+  for (const mode of ['failure', 'malformed', 'missing', 'expired']) {
     await remoteContent(4, '# Failure should not overwrite', mode);
     const result = await sync('pull');
     assert.ok(result.some(a => a.includes('同步失败')), JSON.stringify(result));
     assert.equal(await readFile(local, 'utf8'), '# 远端更新');
-    assert.equal(await evaluate('document.getElementById("desktopLarkSyncBtn").disabled'), false);
+    assert.equal(await evaluate('document.getElementById("larkSyncPull").disabled'), false);
+    assert.ok(!result.join('').includes('CLIXML') && !result.join('').includes('<Objs>') && !result.join('').includes('secret'));
+    if (mode === 'missing') assert.ok(result[0].includes('未找到 lark-cli'));
+    if (mode === 'expired') assert.ok(result[0].includes('登录已过期'));
   }
-  console.log('PASS CLI failure / malformed output preserve local and reset UI');
+  console.log('PASS concise missing CLI / expired auth / permission failures without raw logs');
+  if (process.env.MDVIEWER_PREVIEW_DIR) {
+    await remoteContent(4, '# Preview only', 'missing');
+    await sync('pull');
+    async function cdp(method, params) {
+      const requestId = ++id;
+      const response = new Promise(resolve => pending.set(requestId, resolve));
+      ws.send(JSON.stringify({ id: requestId, method, params }));
+      const msg = await response;
+      assert.ok(!msg.error, JSON.stringify(msg));
+      return msg.result;
+    }
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 1200, height: 1100, deviceScaleFactor: 1, mobile: false });
+    await (await import('node:fs/promises')).mkdir(process.env.MDVIEWER_PREVIEW_DIR, { recursive: true });
+    for (const [name, open] of [['failure', false], ['authorization', true]]) {
+      await evaluate(`document.getElementById('larkAuthHelp').open=${open};document.getElementById('larkSyncDialog').scrollTop=0`);
+      await new Promise(r => setTimeout(r, 150));
+      const clip = await evaluate(`(()=>{const r=document.getElementById('larkSyncDialog').getBoundingClientRect();return {x:r.x-12,y:r.y-12,width:r.width+24,height:r.height+24,scale:1};})()`);
+      const shot = await cdp('Page.captureScreenshot', { format: 'png', clip });
+      await writeFile(path.join(process.env.MDVIEWER_PREVIEW_DIR, name + '.png'), Buffer.from(shot.data, 'base64'));
+    }
+    console.log('PASS captured latest desktop dialog previews');
+  }
   // Native authorization boundary, no handler bypass to file access.
   assert.equal(await evaluate(`(async()=>{ const id='test-unauthorized'; const response=new Promise(resolve=>{const fn=e=>{if(e.data.id===id){chrome.webview.removeEventListener('message',fn);resolve(e.data)}};chrome.webview.addEventListener('message',fn)});chrome.webview.postMessage({kind:'request',id,action:'lark-sync',path:${JSON.stringify(path.join(temp, 'not-authorized.md'))},url:'https://test.feishu.cn/docx/test',direction:'pull'});return (await response).ok;})()`), false);
   console.log('PASS native unauthorized file path rejected');
   await remoteContent(4, '# Slow remote', 'delay');
-  const slow = evaluate(`(async()=>{__alerts=[];__prompts=['https://test.feishu.cn/docx/test','pull']; document.getElementById('desktopLarkSyncBtn').click();await new Promise(r=>setTimeout(r,300));const e=MDViewer.app.getPort('editor');if(e.getViewMode()!=='source')e.toggleSource();const s=document.getElementById('sourceEditor');s.value='# 期间新改动';s.dispatchEvent(new Event('input',{bubbles:true}));__confirm=false;for(let i=0;i<150 && document.getElementById('desktopLarkSyncBtn').disabled;i++)await new Promise(r=>setTimeout(r,100));return {content:MDViewer.app.getPort('editor').getContent({flush:true}),alerts:__alerts};})()`);
+  const slow = evaluate(`(async()=>{document.getElementById('larkSyncDialog').close();document.getElementById('desktopLarkSyncBtn').click();document.getElementById('larkSyncUrl').value='https://test.feishu.cn/docx/test';document.getElementById('larkSyncPull').click();await new Promise(r=>setTimeout(r,300));const e=MDViewer.app.getPort('editor');if(e.getViewMode()!=='source')e.toggleSource();const s=document.getElementById('sourceEditor');s.value='# 期间新改动';s.dispatchEvent(new Event('input',{bubbles:true}));__confirm=false;for(let i=0;i<150 && document.getElementById('larkSyncPull').disabled;i++)await new Promise(r=>setTimeout(r,100));return {content:MDViewer.app.getPort('editor').getContent({flush:true}),alerts:__alerts};})()`);
   const slowResult = await slow;
   assert.equal(slowResult.content, '# 期间新改动');
   assert.equal(await readFile(local, 'utf8'), '# Slow remote');
