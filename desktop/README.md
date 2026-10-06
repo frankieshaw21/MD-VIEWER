@@ -12,6 +12,18 @@
 
 同一 Release 提供 `.sha256` 校验文件。可通过 PowerShell `Get-FileHash .\MDViewer-Setup-版本号-win-x64.exe -Algorithm SHA256` 核对下载文件。
 
+## 飞书文档同步（手动）
+
+参考 [lark-md-sync-desktop](https://github.com/frankieshaw21/lark-md-sync-desktop)，通过已安装且完成用户授权的 `lark-cli` 操作飞书，不在 MD Viewer 中保存授权凭据。此可选功能需要联网及 Windows PowerShell；普通离线编辑不受影响。可用 `LARK_MD_SYNC_CLI` 指定 CLI 路径。
+
+1. 打开本地 Markdown 并保存所有改动。
+2. 点击“更多 → 同步飞书文档”，填写有权限的 Wiki / Docx 链接。
+3. 输入 `push` 上传，或 `pull` 下载，并确认覆盖方向。首次上传覆盖远端；下载在文件旁保留唯一命名的 `.lark-backup-*.md` 备份。
+
+后续上传使用 revision 并发保护，下载检查本地内容哈希；目标发生变化时拒绝覆盖，基线不推进。冲突需手动核对两端，将两端内容调整一致后再同步；当前不提供冲突合并窗口、自动轮询或多任务管理。下载期间若继续编辑，重载由现有未保存/外部变化流程处理，请先核对再选择，勿放弃新改动。Markdown 无法无损保留飞书专属 Block、样式和评论。
+
+链接按本地文件记录在 WebView 本地存储中；同步基线在 `%APPDATA%\MDViewer\lark-sync\`，不复用参考工具的任务配置。
+
 ## 开发者：从源码构建安装
 
 需要安装 .NET 8 SDK 后，在仓库根目录运行：

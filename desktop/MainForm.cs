@@ -188,6 +188,10 @@ internal sealed class MainForm : Form
                     Grant(new[] { resolvedLink.Path });
                     Reply(id, new { path = resolvedLink.Path, fragment = resolvedLink.Fragment });
                     break;
+                case "lark-sync":
+                    var syncPath = RequireAllowedPath(GetString(root, "path"));
+                    Reply(id, await LarkSync.SyncAsync(syncPath, GetString(root, "url"), GetString(root, "direction")));
+                    break;
                 case "check-updates":
                     var latestUpdate = await UpdateChecker.GetLatestAsync();
                     Reply(id, new { version = latestUpdate?.Version, url = latestUpdate?.Url });

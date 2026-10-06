@@ -2,10 +2,12 @@
 
 ## 分支与版本
 
-- 当前工作分支：`feature/md-viewer-performance`；开始新任务时运行 `git status -sb` 再确认，分支可能变化。
-- 当前 `VERSION`：`0.1.8`；`v0.1.7` 已推送至 origin。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
+- 当前工作分支：`feature/lark-sync`；开始新任务时运行 `git status -sb` 再确认，分支可能变化。
+- 当前 `VERSION`：`0.1.9`，已获用户授权准备提交和发布；最后已存在的远端标签为 `v0.1.8`。标签推送后的 GitHub Actions 与 Release 结果需单独核对。正式应用已经包含紧凑工具栏、插入/更多菜单、保存状态及预览/源码/分屏入口；独立 UI Demo 仍在 `demo/`。
 
 ## 当前任务
+
+- 新增桌面“更多 → 同步飞书文档”手动 push/pull，使用 `desktop/LarkSync.cs` 调用已授权 lark-cli；支持 revision/哈希冲突拒绝和下载备份，不含自动同步或合并 UI。完成服务模拟 CLI 集成测试、最新桌面 WebView2 按钮/原生桥接端到端测试及离线 Edge 回归；补测修复远端 `content: null` 可能清空本地的问题。详情和重放命令见 [飞书同步自测](test-results/lark-sync-self-test.md)。真实飞书授权/文档、原生对话框人工操作、超时/崩溃等仍未验收；mock 通过不代表真实飞书同步通过。
 
 `.agent/` 已作为长期项目上下文建立；`CONTRIBUTING.md` 的发布前检查清单要求核对 `.agent/current-work.md`，并按需更新相关文档。后续开始任务时应先确认 `git status -sb` 和远端状态；未经要求不自动创建版本标签或发布。
 

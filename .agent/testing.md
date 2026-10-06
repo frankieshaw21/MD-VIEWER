@@ -9,7 +9,7 @@ Get-ChildItem .\js\*.js | ForEach-Object { node --check $_.FullName }
 git diff --check
 ```
 
-`node --check` 仅检查语法，不验证浏览器行为。仓库当前未见统一的自动化单元测试命令；新增测试或脚本前先确认环境依赖。
+`node --check` 仅检查语法，不验证浏览器行为。飞书同步回归使用 `dotnet run --project tests/lark-sync/LarkSync.Tests.csproj`、`node tests/lark-sync-desktop.mjs` 和 `node tests/lark-sync-browser.mjs`；先构建最新桌面版并关闭已有 MD Viewer。这些脚本使用临时文件与 mock CLI，不调用真实飞书；环境要求与边界见 [飞书同步自测](test-results/lark-sync-self-test.md)。新增测试或脚本前先确认环境依赖。
 
 ## 桌面构建与安装
 

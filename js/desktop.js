@@ -99,6 +99,29 @@
     }
   }
 
+  async function syncLark(button) {
+    const files = context.getPort('files');
+    const file = files.getActiveFile();
+    if (!file || !file.desktopPath) return global.alert('请先打开本地 Markdown 文件。');
+    context.getPort('editor').getContent({ flush: true });
+    if (files.hasUnsavedChanges()) return global.alert('请先保存所有未保存的文档，再同步飞书。');
+    const key = 'mdviewer-lark-url:' + file.desktopPath;
+    const url = global.prompt('飞书 Wiki / Docx 链接（需先安装 lark-cli 并完成用户授权）', localStorage.getItem(key) || '');
+    if (!url) return;
+    const direction = global.prompt('输入 push 上传本地到飞书，或 pull 下载飞书到本地。\n首次上传会覆盖远端，下载会覆盖本地并保留备份。Markdown 不保留所有飞书样式和评论。', 'push');
+    if (direction !== 'push' && direction !== 'pull') return;
+    if (!global.confirm(direction === 'push' ? '确认以已保存的本地内容更新飞书？' : '确认下载飞书内容覆盖本地文件？原内容将备份。')) return;
+    button.disabled = true;
+    button.textContent = '正在同步…';
+    try {
+      const result = await request('lark-sync', { path: file.desktopPath, url: url, direction: direction });
+      localStorage.setItem(key, url);
+      if (direction === 'pull' && files.getActiveFile() === file) await files.reloadFile();
+      global.alert('飞书同步成功。' + (result.backup ? '\n本地备份：' + result.backup : ''));
+    } catch (error) { global.alert('飞书同步失败：' + error.message); }
+    finally { button.disabled = false; button.textContent = '同步飞书文档'; }
+  }
+
   function start(nextContext) {
     if (started) return;
     started = true;
@@ -106,6 +129,11 @@
     document.body.classList.add('desktop-mode');
     const button = document.getElementById('desktopDefaultBtn');
     if (button) button.style.display = '';
+    const syncButton = document.getElementById('desktopLarkSyncBtn');
+    if (syncButton) {
+      syncButton.style.display = '';
+      syncButton.addEventListener('click', function() { syncLark(syncButton); });
+    }
     updateButton = document.getElementById('desktopCheckUpdatesBtn');
     if (updateButton) {
       updateButton.style.display = '';
