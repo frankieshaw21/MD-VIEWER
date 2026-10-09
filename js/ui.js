@@ -106,6 +106,7 @@
     function switchTab(tab) {
       document.getElementById('tabFiles').classList.toggle('active', tab === 'files');
       document.getElementById('tabOutline').classList.toggle('active', tab === 'outline');
+      document.getElementById('sidebarFileActions').hidden = tab !== 'files';
       fileList.style.display = tab === 'files' ? '' : 'none';
       outlineList.style.display = tab === 'outline' ? '' : 'none';
       if (tab === 'outline') editor.updateOutline();

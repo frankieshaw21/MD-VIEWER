@@ -67,6 +67,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\md-viewer-server.ps1
 | 操作 | 快捷键或方式 |
 | --- | --- |
 | 打开文件 | `Ctrl+O` 或拖放文件 |
+| 侧边栏选择文件 | 在“文件”页点击“选择文件”，选中 Markdown 后直接阅读；点击下方文件列表可切换已打开的文档 |
 | 保存 / 全部保存 | `Ctrl+S` / `Ctrl+Shift+S` |
 | 查找 / 替换 | `Ctrl+F` / `Ctrl+H` |
 | 下一个 / 上一个匹配项 | `Ctrl+G` / `Ctrl+Shift+G` |
